@@ -82,9 +82,7 @@ foreach ($process in $processesToCheck) {
     }
 }
 
-# Part 3 - SO_UC.exe
-# -----
-# Part 3 - SO_UC.exe
+# Part 3 - SO_UC.exe // calling module_soget
 # -----
 Clear-Host
 Show-Intro
@@ -94,8 +92,7 @@ Write-Host ""
 Start-Sleep -Seconds 1
 
 # Run module_soget from source in a new window and wait for completion
-Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command \"irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_soget.ps1 | iex\"" -Wait
-
+Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command & {irm 'https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_soget.ps1' | iex}" -Wait
 
 # Part 4 - Check for Firebird Installation
 # -----
