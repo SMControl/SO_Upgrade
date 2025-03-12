@@ -84,84 +84,17 @@ foreach ($process in $processesToCheck) {
 
 # Part 3 - SO_UC.exe
 # -----
+# Part 3 - SO_UC.exe
+# -----
 Clear-Host
 Show-Intro
 Write-Host "[Part 3/15] Checking for Setup Files. Please Wait." -ForegroundColor Cyan
 Write-Host "[###____________]" -ForegroundColor Cyan
 Write-Host ""
 Start-Sleep -Seconds 1
-# Section A - Retrieve .exe links from the webpage
-# PartVersion 1.00
-# -----
-$downloadDirectory = "C:\winsm\SmartOffice_Installer"
-$webpageUrl = "https://www.stationmaster.com/downloads/"
 
-if (-not (Test-Path $downloadDirectory)) {
-    # Ensure download directory exists
-    New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
-}
-
-# Retrieve Setup.exe links
-$setupLinks = (Invoke-WebRequest -Uri $webpageUrl).Links |
-              Where-Object { $_.href -match "^https://www\.stationmaster\.com/Download/Setup\d+\.exe$" } |
-              ForEach-Object { $_.href }
-
-# -----
-# Section B - Filter for the highest two versions of Setup.exe
-# PartVersion 1.01
-# -----
-$setupLinksWithVersions = $setupLinks | ForEach-Object {
-    [PSCustomObject]@{
-        Link = $_
-        Version = [regex]::Match($_, "Setup(\d+)\.exe").Groups[1].Value -as [int]
-    }
-}
-$highestTwoLinks = $setupLinksWithVersions |
-                   Sort-Object -Property Version -Descending |
-                   Select-Object -First 2 -ExpandProperty Link
-
-# -----
-# Section C - Download the highest two versions if not already present
-# PartVersion 1.03
-# -----
-foreach ($downloadLink in $highestTwoLinks) {
-    $originalFilename = $downloadLink.Split('/')[-1]
-    $destinationPath = Join-Path -Path $downloadDirectory -ChildPath $originalFilename
-
-    # Check the size of the file on the server
-    $request = [System.Net.HttpWebRequest]::Create($downloadLink)
-    $request.Method = "HEAD"
-    $request.UserAgent = "Mozilla/5.0"
-
-    try {
-        $response = $request.GetResponse()
-        $contentLength = $response.ContentLength
-        $response.Close()
-    } catch {
-        Write-Error "Error fetching file information for $originalFilename $($_.Exception.Message)"
-        continue
-    }
-
-    # Compare size with existing file
-    $matchingFile = Get-ChildItem -Path $downloadDirectory -Filter $originalFilename |
-                    Where-Object { $_.Length -eq $contentLength }
-
-    if (-not $matchingFile) {
-        Write-Host "Downloading new version: $originalFilename..."
-        Invoke-WebRequest -Uri $downloadLink -OutFile $destinationPath -UseBasicParsing
-    }
-}
-
-# -----
-# Section D - Delete older downloads, keeping the latest two
-# PartVersion 1.01
-# -----
-$downloadedFiles = Get-ChildItem -Path $downloadDirectory -Filter "*.exe" |
-                   Sort-Object LastWriteTime -Descending
-if ($downloadedFiles.Count -gt 2) {
-    $filesToDelete = $downloadedFiles | Select-Object -Skip 2
-    Remove-Item -Path ($filesToDelete | ForEach-Object { $_.FullName }) -Force
-}
+# Run module_soget from source in a new window and wait for completion
+Start-Process powershell.exe -ArgumentList "-NoProfile -ExecutionPolicy Bypass -Command \"irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_soget.ps1 | iex\"" -Wait
 
 
 # Part 4 - Check for Firebird Installation
