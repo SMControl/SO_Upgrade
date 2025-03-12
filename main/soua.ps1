@@ -173,7 +173,7 @@ Write-Host "[####___________]" -ForegroundColor Cyan
 Write-Host ""
 Start-Sleep -Seconds 1
 $firebirdDir = "C:\Program Files (x86)\Firebird"
-$firebirdInstallerURL = "https://raw.githubusercontent.com/SMControl/SM_Firebird_Installer/main/SMFI_Online.ps1"
+$firebirdInstallerURL = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_firebird.ps1"
 
 if (-not (Test-Path $firebirdDir)) {
     Write-Host "Firebird not found. Installing Firebird..." -ForegroundColor Yellow
