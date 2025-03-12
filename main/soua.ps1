@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "Smart Office - Upgrade Assistant - Version 1.143" -ForegroundColor Green
+    Write-Host "Smart Office - Upgrade Assistant" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -36,20 +36,17 @@ if (-not (Test-Admin)) {
     exit
 }
 # Download the SmartOffice_Upgrade_Assistant.exe and save it to C:\winsm
-$assistantExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SmartOffice_Upgrade_Assistant.exe?raw=true"
-$assistantExeDestinationPath = "C:\winsm\SmartOffice_Upgrade_Assistant.exe"
-if (-Not (Test-Path $assistantExeDestinationPath)) {
-    Invoke-WebRequest -Uri $assistantExeUrl -OutFile $assistantExeDestinationPath
-} else {
-    #Write-Host "$assistantExeDestinationPath already exists. Skipping download."
-}
+#$assistantExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SmartOffice_Upgrade_Assistant.exe?raw=true"
+#$assistantExeDestinationPath = "C:\winsm\SmartOffice_Upgrade_Assistant.exe"
+#if (-Not (Test-Path $assistantExeDestinationPath)) {
+#    Invoke-WebRequest -Uri $assistantExeUrl -OutFile $assistantExeDestinationPath
+#} else {
+#}
 # Download the SO_UC.exe and save it to C:\winsm
 $soucExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SO_UC.exe?raw=true"
 $soucExeDestinationPath = "C:\winsm\SO_UC.exe"
 if (-Not (Test-Path $soucExeDestinationPath)) {
     Invoke-WebRequest -Uri $soucExeUrl -OutFile $soucExeDestinationPath
-} else {
-    #Write-Host "$soucExeDestinationPath already exists. Skipping download."
 }
 
 # ==================================
@@ -60,7 +57,6 @@ Show-Intro
 Write-Host "[Part 2/15] Checking processes" -ForegroundColor Cyan
 Write-Host "[##_____________]" -ForegroundColor Cyan
 Write-Host ""
-
 $processesToCheck = @("Sm32Main", "Sm32")
 foreach ($process in $processesToCheck) {
     # Check if the process is running
@@ -75,7 +71,7 @@ foreach ($process in $processesToCheck) {
 }
 
 # ==================================
-# Part 3 - SO_UC.exe // calling module_soget    /// CALLS INTERNAL
+# Part 3 - SO_UC.exe // calling module_soget
 # ==================================
 Clear-Host
 Show-Intro
@@ -89,7 +85,7 @@ $sogetScriptURL = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/h
 Invoke-Expression (Invoke-RestMethod -Uri $sogetScriptURL)
 
 # ==================================
-# Part 4 - Firebird Installation
+# Part 4 - Firebird Installation // calling module_firebird
 # ==================================
 Clear-Host
 Show-Intro
@@ -109,12 +105,6 @@ if (-not (Test-Path $firebirdDir)) {
 # ==================================
 # Part 5 - Stop SMUpdates if Running
 # ==================================
-Clear-Host
-Show-Intro
-Write-Host "[Part 5/15] Stopping SMUpdates if running" -ForegroundColor Cyan
-Write-Host "[#####__________]" -ForegroundColor Cyan
-Write-Host ""
-
 $monitorJob = Start-Job -ScriptBlock {
     function Monitor-SmUpdates {
         while ($true) {
@@ -132,32 +122,13 @@ $monitorJob = Start-Job -ScriptBlock {
 # ==================================
 # Part 6 - Manage SO Live Sales Service
 # ==================================
-Clear-Host
-Show-Intro
-Write-Host "[Part 6/15] Managing SO Live Sales service" -ForegroundColor Cyan
-Write-Host "[######_________]" -ForegroundColor Cyan
-Write-Host ""
-
 $ServiceName = "srvSOLiveSales"
-$service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
-$wasRunning = $false
-if ($service) {
-    if ($service.Status -eq 'Running') {
-        $wasRunning = $true
-        Write-Host "Stopping $ServiceName service..." -ForegroundColor Yellow
-        try {
-            Stop-Service -Name $ServiceName -Force -ErrorAction SilentlyContinue
-            Set-Service -Name $ServiceName -StartupType Disabled
-            Write-Host "$ServiceName service stopped and set to Disabled." -ForegroundColor Green
-        } catch {
-            Write-Host "Error stopping service '$ServiceName': $_" -ForegroundColor Red
-            exit
-        }
-    } else {
-        Write-Host "$ServiceName service is not running." -ForegroundColor Yellow
-    }
-} else {
-    #Write-Host "$ServiceName service not found." -ForegroundColor Yellow
+try {
+    if ((Get-Service -Name $ServiceName -ErrorAction Stop).Status -eq 'Running') {
+                Stop-Service -Name $ServiceName -Force -ErrorAction Stop
+        Set-Service -Name $ServiceName -StartupType Disabled
+            }
+} catch {
 }
 
 # ==================================
@@ -204,7 +175,6 @@ Show-Intro
 Write-Host "[Part 8/15] Waiting for a single instance of Firebird" -ForegroundColor Cyan
 Write-Host "[########_______]" -ForegroundColor Cyan
 Write-Host ""
-
 $setupDir = "$workingDir\SmartOffice_Installer"
 if (-not (Test-Path $setupDir -PathType Container)) {
     Write-Host "Error: Setup directory '$setupDir' does not exist." -ForegroundColor Red
@@ -213,7 +183,7 @@ if (-not (Test-Path $setupDir -PathType Container)) {
 function WaitForSingleFirebirdInstance {
     $firebirdProcesses = Get-Process -Name "firebird" -ErrorAction SilentlyContinue
     while ($firebirdProcesses.Count -gt 1) {
-        Write-Host "Warning: Multiple instances of 'firebird.exe' are running. Currently: $($firebirdProcesses.Count)" -ForegroundColor Yellow
+        Write-Host "`rWarning: Multiple instances of 'firebird.exe' are running. Currently: $($firebirdProcesses.Count) " -ForegroundColor Yellow -NoNewline
         Start-Sleep -Seconds 3
         $firebirdProcesses = Get-Process -Name "firebird" -ErrorAction SilentlyContinue
     }
