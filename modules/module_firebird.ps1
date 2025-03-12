@@ -12,7 +12,6 @@ function Write-Success {
     )
     Write-Host $message -ForegroundColor Green
 }
-
 # Function to write output in red
 function Write-ErrorOutput {
     param (
