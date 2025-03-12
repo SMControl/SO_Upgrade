@@ -1,7 +1,8 @@
 # SO Upgrade Assistant
 
 ## Overview
-A helper script for managing SO upgrades. It handles stopping services, downloading setup files, running installers, and restoring configurations.
+A helper script for managing SO upgrades.
+Handles stopping services/processes, downloading setup files, running installers, and restoring state.
 
 ## Features
 - Checks for admin privileges.
@@ -14,4 +15,4 @@ A helper script for managing SO upgrades. It handles stopping services, download
 1. Open **PowerShell as Administrator**.
 2. Run:
    ```powershell
-   irm https://raw.githubusercontent.com/YourGitHubUser/SO_Upgrade/main/soua.ps1 | iex
+   irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/soua.ps1 | iex
