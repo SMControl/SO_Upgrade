@@ -15,4 +15,4 @@ Handles stopping services/processes, downloading setup files, running installers
 1. Open **PowerShell as Administrator**.
 2. Run:
    ```powershell
-   irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/soua.ps1 | iex
+   irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1 | iex
