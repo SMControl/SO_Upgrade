@@ -23,7 +23,7 @@ Set-Location -Path $workingDir
 Clear-Host
 Show-Intro
 Write-Host "[Part 1/15] System Pre-Checks" -ForegroundColor Cyan
-Write-Host "[#______________]" -ForegroundColor Cyan
+Write-Host "[______________________________]" -ForegroundColor Cyan
 Write-Host ""
 
 function Test-Admin {
@@ -55,7 +55,7 @@ if (-Not (Test-Path $soucExeDestinationPath)) {
 Clear-Host
 Show-Intro
 Write-Host "[Part 2/15] Checking processes" -ForegroundColor Cyan
-Write-Host "[##_____________]" -ForegroundColor Cyan
+Write-Host "[██____________________________]" -ForegroundColor Cyan
 Write-Host ""
 $processesToCheck = @("Sm32Main", "Sm32")
 foreach ($process in $processesToCheck) {
@@ -76,7 +76,7 @@ foreach ($process in $processesToCheck) {
 Clear-Host
 Show-Intro
 Write-Host "[Part 3/15] Checking for Setup Files. Please Wait." -ForegroundColor Cyan
-Write-Host "[###____________]" -ForegroundColor Cyan
+Write-Host "[██████________________________]" -ForegroundColor Cyan
 Write-Host ""
 Start-Sleep -Seconds 1
 # Define the URL for the SO Get module
@@ -90,7 +90,7 @@ Invoke-Expression (Invoke-RestMethod -Uri $sogetScriptURL)
 Clear-Host
 Show-Intro
 Write-Host "[Part 4/15] Checking for Firebird installation" -ForegroundColor Cyan
-Write-Host "[####___________]" -ForegroundColor Cyan
+Write-Host "[████████______________________]" -ForegroundColor Cyan
 Write-Host ""
 Start-Sleep -Seconds 1
 # Define the URL for the Firebird installation script
@@ -139,7 +139,7 @@ try {
 Clear-Host
 Show-Intro
 Write-Host "[Part 7/15] Managing PDTWiFi processes" -ForegroundColor Cyan
-Write-Host "[#######________]" -ForegroundColor Cyan
+Write-Host "[██████████████________________]" -ForegroundColor Cyan
 Write-Host ""
 
 # Initialize the process states
@@ -173,7 +173,7 @@ if ($pdtWiFi64Process) {
 Clear-Host
 Show-Intro
 Write-Host "[Part 8/15] Waiting for a single instance of Firebird" -ForegroundColor Cyan
-Write-Host "[########_______]" -ForegroundColor Cyan
+Write-Host "[████████████████______________]" -ForegroundColor Cyan
 Write-Host ""
 $setupDir = "$workingDir\SmartOffice_Installer"
 if (-not (Test-Path $setupDir -PathType Container)) {
@@ -198,7 +198,7 @@ WaitForSingleFirebirdInstance
 Clear-Host
 Show-Intro
 Write-Host "[Part 9/15] Launching SO setup..." -ForegroundColor Cyan
-Write-Host "[#########______]" -ForegroundColor Cyan
+Write-Host "[██████████████████____________]" -ForegroundColor Cyan
 Write-Host ""
 
 # Get all setup executables in the SmartOffice_Installer directory
@@ -259,7 +259,7 @@ try {
 Clear-Host
 Show-Intro
 Write-Host "[Part 10/15] Post Upgrade" -ForegroundColor Cyan
-Write-Host "[##########_____]" -ForegroundColor Cyan
+Write-Host "[████████████████████__________]" -ForegroundColor Cyan
 Write-Host ""
 
 # Stop monitoring SMUpdates process
@@ -282,7 +282,7 @@ foreach ($process in $processesToCheck) {
 Clear-Host
 Show-Intro
 Write-Host "[Part 11/15] Setting permissions for Stationmaster folder. Please Wait..." -ForegroundColor Cyan
-Write-Host "[###########____]" -ForegroundColor Cyan
+Write-Host "[██████████████████████________]" -ForegroundColor Cyan
 Write-Host ""
 
 try {
@@ -297,7 +297,7 @@ try {
 Clear-Host
 Show-Intro
 Write-Host "[Part 12/15] Setting permissions for Firebird folder. Please Wait..." -ForegroundColor Cyan
-Write-Host "[############___]" -ForegroundColor Cyan
+Write-Host "[████████████████████████______]" -ForegroundColor Cyan
 Write-Host ""
 
 try {
@@ -312,7 +312,7 @@ try {
 Clear-Host
 Show-Intro
 Write-Host "[Part 13/15] Reverting SO Live Sales service" -ForegroundColor Cyan
-Write-Host "[#############__]" -ForegroundColor Cyan
+Write-Host "[██████████████████████████____]" -ForegroundColor Cyan
 Write-Host ""
 
 if ($wasRunning) {
@@ -336,7 +336,7 @@ if ($wasRunning) {
 Clear-Host
 Show-Intro
 Write-Host "[Part 14/15] Reverting PDTWiFi processes" -ForegroundColor Cyan
-Write-Host "[##############_]" -ForegroundColor Cyan
+Write-Host "[████████████████████████████__]" -ForegroundColor Cyan
 Write-Host ""
 
 # Section A - Recall and Revert PDTWiFi
@@ -360,7 +360,7 @@ if ($PDTWiFiStates[$PDTWiFi64] -eq "Running") {
 Clear-Host
 Show-Intro
 Write-Host "[Part 15/15] Clean up and finish" -ForegroundColor Cyan
-Write-Host "[###############]" -ForegroundColor Cyan
+Write-Host "[██████████████████████████████]" -ForegroundColor Cyan
 Write-Host ""
 
 # Run SO_UC.exe if it's Task doesn't exist.
