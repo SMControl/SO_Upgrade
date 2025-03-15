@@ -27,5 +27,5 @@ Open **PowerShell/Terminal as Administrator**.
 </details>
 
 Copy and Paste in the following and press Enter.
-  ```powershell
-  irm [https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1](https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1) | iex
+```powershell
+irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1 | iex
