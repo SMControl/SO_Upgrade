@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "Smart Office - Upgrade Assistant" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
