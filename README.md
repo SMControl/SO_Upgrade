@@ -21,7 +21,7 @@ Handles stopping services/processes, downloading setup files, running installers
 ## How to Run
 Open **PowerShell/Terminal as Administrator**.
 
-![Open as Admin](https://github.com/SMControl/SO_Upgrade/blob/main/Open-as-admin.png)
+![Open as Admin](https://github.com/SMControl/SO_Upgrade/blob/main/Open-as-admin2.png)
 
 Run:
    ```powershell
