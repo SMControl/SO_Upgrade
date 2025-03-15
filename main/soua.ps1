@@ -382,6 +382,30 @@ Write-Host "Completed in $($totalMinutes)m $($totalSeconds)s." -ForegroundColor 
 Write-Host " "
 Write-Host "Consider if you need to Reboot at this stage." -ForegroundColor Yellow
 Write-Host " "
+
+# Summary Table
+Write-Host "System Status Summary:" -ForegroundColor Cyan
+Write-Host "---------------------------------" -ForegroundColor Cyan
+Write-Host "{0,-20} {1}" -f "Service/Process", "Status" -ForegroundColor Cyan
+Write-Host "---------------------------------" -ForegroundColor Cyan
+
+# Service Status
+$ServiceName = "srvSOLiveSales"
+$service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+$serviceStatus = if ($service -and $service.Status -eq 'Running') { "Running" } else { "Stopped" }
+Write-Host "{0,-20} {1}" -f $ServiceName, $serviceStatus
+
+# PDTWiFi Status
+$pdtWiFiProcess = Get-Process -Name "PDTWiFi" -ErrorAction SilentlyContinue
+$pdtWiFiStatus = if ($pdtWiFiProcess) { "Running" } else { "Stopped" }
+Write-Host "{0,-20} {1}" -f "PDTWiFi", $pdtWiFiStatus
+
+# PDTWiFi64 Status
+$pdtWiFi64Process = Get-Process -Name "PDTWiFi64" -ErrorAction SilentlyContinue
+$pdtWiFi64Status = if ($pdtWiFi64Process) { "Running" } else { "Stopped" }
+Write-Host "{0,-20} {1}" -f "PDTWiFi64", $pdtWiFi64Status
+
+Write-Host " "
 Write-Host "Press Enter to start Smart Office, '9' to reboot now, or any other key to exit."
 $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 
