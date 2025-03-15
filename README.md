@@ -1,5 +1,7 @@
 # SO Upgrade Assistant
 
+![SO Upgrade Screenshot](https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/SO_Upgrade_Screenshot.png)
+
 ## Overview
 A helper script for managing SO upgrades.
 Handles stopping services/processes, downloading setup files, running installers, and restoring state.
