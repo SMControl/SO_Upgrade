@@ -13,6 +13,9 @@ Handles stopping services/processes, downloading setup files, running installers
 - Installs Firebird if needed.
 - Ensures correct folder permissions.
 
+**⚠️ Does not support the Setup requiring a Reboot.**
+> If a reboot is required, either finish the Setup manually after a reboot OR leave the reboot until the end.
+
 ## How to Run
 1. Open **PowerShell as Administrator**.
 2. Run:
