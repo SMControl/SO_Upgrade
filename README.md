@@ -1,6 +1,6 @@
 # SO Upgrade Assistant
 
-![SO Upgrade Screenshot](https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/SO_Upgrade_Screenshot.png)
+![SO Upgrade Screenshot](https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/SO_Upgrade_Screenshot2.png)
 
 ## Overview
 A helper script for managing SO upgrades.
