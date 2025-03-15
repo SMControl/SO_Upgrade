@@ -7,17 +7,19 @@ Handles stopping services/processes, downloading setup files, running installers
 ![SO Upgrade Screenshot](https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/SO_Upgrade_Screenshot3.png)
 
 ## Features
-- Checks for admin privileges.
-- Downloads and verifies SO setup files.
-- Stops and restarts SO processes/services.
-- Installs Firebird if needed.
-- Ensures correct folder permissions.
+- Installs Firebird with our criteria if needed.
+- Downloads latest SO setup files.
+- Sets a task to check daily for new SO Setup files.
+- Automatically handles the start stop state of LiveSales Service.
+- Automatically handles the start stop state of both PDTWiFi's
+- Ensures correct folder permissions for Client access.
+- Non-Intrusive - Only assists with before and after.
 
-**⚠️ Does not support the Setup requiring a Reboot.**
+**⚠️ NB - Does not support the Setup requiring a Reboot.**
 > If a reboot is required, either finish the Setup manually after a reboot OR leave the reboot until the end.
 
 ## How to Run
-1. Open **PowerShell as Administrator**.
+1. Open **PowerShell/Terminal as Administrator**.
 2. Run:
    ```powershell
    irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1 | iex
