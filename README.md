@@ -21,8 +21,11 @@ Handles stopping services/processes, downloading setup files, running installers
 ## How to Run
 Open **PowerShell/Terminal as Administrator**.
 
-![Open as Admin](https://github.com/SMControl/SO_Upgrade/blob/main/Open-as-admin2.png)
+<details>
+  <summary>Click to show "Open as Admin" image</summary>
+  <img src="https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/Open-as-admin2.png" alt="Open as Admin">
+</details>
 
 Copy and Paste in the following and press Enter.
-   ```powershell
-   irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1 | iex
+  ```powershell
+  irm [https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1](https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1) | iex
