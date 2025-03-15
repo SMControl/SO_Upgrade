@@ -380,10 +380,16 @@ Write-Host "Smart Office $(Split-Path -Leaf $selectedExe.Name) Installed"
 Write-Host " "
 Write-Host "Completed in $($totalMinutes)m $($totalSeconds)s." -ForegroundColor Green
 Write-Host " "
-Write-Host "Press Enter to start Smart Office, or any other key to exit."
+Write-Host "Consider if you need to Reboot at this stage." -ForegroundColor Yellow
+Write-Host " "
+Write-Host "Press Enter to start Smart Office, '9' to reboot now, or any other key to exit."
 $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+
 if ($key.VirtualKeyCode -eq 13) {
     Start-Process "C:\Program Files (x86)\StationMaster\Sm32.exe"
+} elseif ($key.VirtualKeyCode -eq 57) { # 57 is the VirtualKeyCode for '9'
+    Write-Host "Rebooting..."
+    Restart-Computer -Force
 } else {
     Write-Host "Exiting..."
 }
