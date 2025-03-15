@@ -19,7 +19,10 @@ Handles stopping services/processes, downloading setup files, running installers
 > If a reboot is required, either finish the Setup manually after a reboot OR leave the reboot until the end.
 
 ## How to Run
-1. Open **PowerShell/Terminal as Administrator**.
-2. Run:
+Open **PowerShell/Terminal as Administrator**.
+
+![Open as Admin](https://github.com/SMControl/SO_Upgrade/blob/main/Open-as-admin.png)
+
+Run:
    ```powershell
    irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1 | iex
