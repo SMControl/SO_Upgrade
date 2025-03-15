@@ -22,7 +22,7 @@ Handles stopping services/processes, downloading setup files, running installers
 Open **PowerShell/Terminal as Administrator**.
 
 <details>
-  <summary>Click to show "Open as Admin" image</summary>
+  <summary>How to Open Admin Powershell/Terminal</summary>
   <img src="https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/Open-as-admin2.png" alt="Open as Admin">
 </details>
 
