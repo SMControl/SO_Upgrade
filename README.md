@@ -23,6 +23,6 @@ Open **PowerShell/Terminal as Administrator**.
 
 ![Open as Admin](https://github.com/SMControl/SO_Upgrade/blob/main/Open-as-admin2.png)
 
-Run:
+Copy and Paste in the following and press Enter.
    ```powershell
    irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1 | iex
