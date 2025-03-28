@@ -29,3 +29,11 @@ Open **PowerShell/Terminal as Administrator**.
 Copy and Paste in the following and press Enter.
 ```powershell
 irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/soua.ps1 | iex
+```
+
+## Expected workflow of the script:
+1. Run Upgrade Script.
+2. After Installing SO, Open SO for finishing database updates etc.
+3. Close SO after it has finished starting up.
+4. Press OK to let Upgrade Script Finish 
+5. Reboot if Required or Open SO & Finished.
