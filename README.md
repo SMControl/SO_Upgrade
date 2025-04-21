@@ -32,8 +32,9 @@ irm https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/
 ```
 
 ## Expected workflow of the script:
-1. Run Upgrade Script.
-2. After Installing SO, Open SO for finishing database updates etc.
-3. Close SO after it has finished starting up.
-4. Press OK to let Upgrade Script Finish 
-5. Reboot if Required or Open SO & Finished.
+1. Backup and Close SO.
+2. Minimize all other windows and Launch Script.
+3. Allow SO to open after the setup is complete to allow for database updates etc.
+4. Close SO after it has fully finished starting up.
+5. Press OK on the pop up window to let the Upgrade Script know that Setup.exe is finished. 
+6. Consider rebooting the PC
