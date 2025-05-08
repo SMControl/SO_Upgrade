@@ -50,25 +50,25 @@ if (-Not (Test-Path $soucExeDestinationPath)) {
 }
 
 # ==================================
-# Part 2 - Check for Running SO Processes
+# Part 2 - Check for Running SO Processes   #### MOVED TO PART 8
 # ==================================
-Clear-Host
-Show-Intro
-Write-Host "[Part 2/15] Checking processes" -ForegroundColor Cyan
-Write-Host "[██____________________________]" -ForegroundColor Cyan
-Write-Host ""
-$processesToCheck = @("Sm32Main", "Sm32")
-foreach ($process in $processesToCheck) {
-    # Check if the process is running
-    $processRunning = Get-Process -Name $process -ErrorAction SilentlyContinue
-    if ($processRunning) {
-        Write-Host "Smart Office is open. Please close it to continue." -ForegroundColor Red
-        while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
-            # Wait without spamming the terminal
-            Start-Sleep -Seconds 3  # Check every 3 seconds
-        }
-    }
-}
+#Clear-Host
+#Show-Intro
+#Write-Host "[Part 2/15] Checking processes" -ForegroundColor Cyan
+#Write-Host "[██____________________________]" -ForegroundColor Cyan
+#Write-Host ""
+#$processesToCheck = @("Sm32Main", "Sm32")
+#foreach ($process in $processesToCheck) {
+#    # Check if the process is running
+#    $processRunning = Get-Process -Name $process -ErrorAction SilentlyContinue
+#    if ($processRunning) {
+#        Write-Host "Smart Office is open. Please close it to continue." -ForegroundColor Red
+#        while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+#            # Wait without spamming the terminal
+#            Start-Sleep -Seconds 3  # Check every 3 seconds
+#        }
+#    }
+#}
 
 # ==================================
 # Part 3 - SO_UC.exe // calling module_soget
@@ -168,13 +168,29 @@ if ($pdtWiFi64Process) {
 }
 
 # ==================================
-# Part 8 - Wait for Single Instance of Firebird.exe
+# Part 8 - Make Sure SO is closed & Wait for Single Instance of Firebird.exe
 # ==================================
 Clear-Host
 Show-Intro
-Write-Host "[Part 8/15] Waiting for a single instance of Firebird" -ForegroundColor Cyan
+Write-Host "[Part 8/15] Wait SO Closed & Single Firebird process..." -ForegroundColor Cyan
 Write-Host "[████████████████______________]" -ForegroundColor Cyan
 Write-Host ""
+
+# Make sure SO is closed
+$processesToCheck = @("Sm32Main", "Sm32")
+foreach ($process in $processesToCheck) {
+    # Check if the process is running
+    $processRunning = Get-Process -Name $process -ErrorAction SilentlyContinue
+    if ($processRunning) {
+        Write-Host "Smart Office is open. Please close it to continue." -ForegroundColor Red
+        while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+            # Wait without spamming the terminal
+            Start-Sleep -Seconds 3  # Check every 3 seconds
+        }
+    }
+}
+
+# Wait for single firebird instance
 $setupDir = "$workingDir\SmartOffice_Installer"
 if (-not (Test-Path $setupDir -PathType Container)) {
     Write-Host "Error: Setup directory '$setupDir' does not exist." -ForegroundColor Red
