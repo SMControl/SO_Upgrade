@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.192" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.201" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -35,13 +35,7 @@ if (-not (Test-Admin)) {
     pause
     exit
 }
-# Download the SmartOffice_Upgrade_Assistant.exe and save it to C:\winsm
-#$assistantExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SmartOffice_Upgrade_Assistant.exe?raw=true"
-#$assistantExeDestinationPath = "C:\winsm\SmartOffice_Upgrade_Assistant.exe"
-#if (-Not (Test-Path $assistantExeDestinationPath)) {
-#    Invoke-WebRequest -Uri $assistantExeUrl -OutFile $assistantExeDestinationPath
-#} else {
-#}
+
 # Download the SO_UC.exe and save it to C:\winsm
 $soucExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SO_UC.exe?raw=true"
 $soucExeDestinationPath = "C:\winsm\SO_UC.exe"
@@ -49,9 +43,7 @@ if (-Not (Test-Path $soucExeDestinationPath)) {
     Invoke-WebRequest -Uri $soucExeUrl -OutFile $soucExeDestinationPath
 }
 
-# ==================================
 # Part 2 - Check for Running SO Processes   #### MOVED TO PART 8
-# ==================================
 
 # ==================================
 # Part 3 - SO_UC.exe // calling module_soget
@@ -281,6 +273,9 @@ foreach ($process in $processesToCheck) {
 
 # ==================================
 # Part 11 - Set Permissions for SM Folder
+# PartVersion-1.10
+# - Reverted to the original icacls command for setting permissions.
+# - Added a message to the user about potential delays.
 # ==================================
 Clear-Host
 Show-Intro
@@ -288,11 +283,13 @@ Write-Host "[Part 11/15] Setting permissions for Stationmaster folder. Please Wa
 Write-Host "[██████████████████████________]" -ForegroundColor Cyan
 Write-Host ""
 
+Write-Host "Please wait, this task may take ~1-30+ minutes to complete depending on PC speed. Do not interrupt."
 try {
     & icacls "C:\Program Files (x86)\StationMaster" /grant "*S-1-1-0:(OI)(CI)F" /T /C > $null
 } catch {
     Write-Host "Error setting permissions for SM folder: $_" -ForegroundColor Red
 }
+
 
 # ==================================
 # Part 12 - Set Permissions for Firebird Folder
@@ -390,14 +387,67 @@ if ($PDTWiFiStates[$PDTWiFi64] -eq "Running") {
     Write-Host "$PDTWiFi64 was not running, no action taken." -ForegroundColor Yellow
 }
 
+# Initialize script start time
+$startTime = Get-Date
+function Show-Intro {
+    Write-Host "SO Upgrade Assistant - Version 1.193" -ForegroundColor Green
+    Write-Host "--------------------------------------------------------------------------------"
+    Write-Host ""
+}
+# Set the working directory
+$workingDir = "C:\winsm"
+if (-not (Test-Path $workingDir -PathType Container)) {
+    try {
+        New-Item -Path $workingDir -ItemType Directory -ErrorAction Stop | Out-Null
+    } catch {
+        Write-Host "Error: Unable to create directory $workingDir" -ForegroundColor Red
+        exit
+    }
+}
+Set-Location -Path $workingDir
+
 # ==================================
 # Part 15 - Clean up and Finish Script
+# PartVersion-1.07
+# - Fixed the script duration calculation to correctly capture start time.
+# - Improved comments and formatting.
 # ==================================
 Clear-Host
 Show-Intro
 Write-Host "[Part 15/15] Clean up and finish" -ForegroundColor Cyan
 Write-Host "[██████████████████████████████]" -ForegroundColor Cyan
-Write-Host ""
+
+# Get status of services and processes
+$liveSalesService = Get-Service -Name "srvSOLiveSales" -ErrorAction SilentlyContinue
+if ($liveSalesService) {
+    $liveSalesServiceStatus = $liveSalesService.Status
+} else {
+    $liveSalesServiceStatus = "Not Installed"
+}
+$pdtWifiStatus = if (Get-Process -Name "PDTWiFi" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
+$pdtWifi64Status = if (Get-Process -Name "PDTWiFi64" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
+
+# Output the status table
+Write-Host " "
+Write-Host "Process Status:" -ForegroundColor Yellow
+Write-Host "------------------------------------------------" -ForegroundColor Yellow
+Write-Host ("{0,-25} {1,-15}" -f "Item", "Status") -ForegroundColor Yellow
+Write-Host ("{0,-25} {1,-15}" -f "-------------------------", "---------------") -ForegroundColor Yellow
+
+# Function to determine status color
+function Get-StatusColor ($status) {
+    if ($status -eq "Running") {
+        return "Green"
+    } else {
+        return "Yellow"
+    }
+}
+
+Write-Host ("{0,-25} {1,-15}" -f "SO Live Sales Service", $liveSalesServiceStatus) -ForegroundColor (Get-StatusColor $liveSalesServiceStatus)
+Write-Host ("{0,-25} {1,-15}" -f "PDTWiFi.exe", $pdtWifiStatus) -ForegroundColor (Get-StatusColor $pdtWifiStatus)
+Write-Host ("{0,-25} {1,-15}" -f "PDTWiFi64.exe", $pdtWifi64Status) -ForegroundColor (Get-StatusColor $pdtWifi64Status)
+
+Write-Host "------------------------------------------------" -ForegroundColor Yellow
 
 # Run SO_UC.exe if it's Task doesn't exist.
 $taskExists = Get-ScheduledTask -TaskName "SO InstallerUpdates" -ErrorAction SilentlyContinue
@@ -406,13 +456,13 @@ if (-not $taskExists) {
 } else {
     #Write-Output "Scheduled Task 'SO InstallerUpdates' already exists. Skipping execution."
 }
+
 # Calculate and display script execution time
 $endTime = Get-Date
 $executionTime = $endTime - $startTime
 $totalMinutes = [math]::Floor($executionTime.TotalMinutes)
 $totalSeconds = $executionTime.Seconds
-Write-Host " "
-Write-Host "Smart Office $(Split-Path -Leaf $selectedExe.Name) Installed"
+
 Write-Host " "
 Write-Host "Completed in $($totalMinutes)m $($totalSeconds)s." -ForegroundColor Green
 Write-Host " "
