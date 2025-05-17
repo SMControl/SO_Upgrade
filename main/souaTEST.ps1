@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.192" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.193" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -390,14 +390,34 @@ if ($PDTWiFiStates[$PDTWiFi64] -eq "Running") {
     Write-Host "$PDTWiFi64 was not running, no action taken." -ForegroundColor Yellow
 }
 
+# Initialize script start time
+$startTime = Get-Date
+function Show-Intro {
+    Write-Host "SO Upgrade Assistant - Version 1.193" -ForegroundColor Green
+    Write-Host "--------------------------------------------------------------------------------"
+    Write-Host ""
+}
+# Set the working directory
+$workingDir = "C:\winsm"
+if (-not (Test-Path $workingDir -PathType Container)) {
+    try {
+        New-Item -Path $workingDir -ItemType Directory -ErrorAction Stop | Out-Null
+    } catch {
+        Write-Host "Error: Unable to create directory $workingDir" -ForegroundColor Red
+        exit
+    }
+}
+Set-Location -Path $workingDir
+
 # ==================================
 # Part 15 - Clean up and Finish Script
+# PartVersion-1.03
+# - Added status summary of Live Sales service and PDTWiFi processes.
 # ==================================
 Clear-Host
 Show-Intro
 Write-Host "[Part 15/15] Clean up and finish" -ForegroundColor Cyan
 Write-Host "[██████████████████████████████]" -ForegroundColor Cyan
-Write-Host ""
 
 # Run SO_UC.exe if it's Task doesn't exist.
 $taskExists = Get-ScheduledTask -TaskName "SO InstallerUpdates" -ErrorAction SilentlyContinue
@@ -411,10 +431,26 @@ $endTime = Get-Date
 $executionTime = $endTime - $startTime
 $totalMinutes = [math]::Floor($executionTime.TotalMinutes)
 $totalSeconds = $executionTime.Seconds
-Write-Host " "
-Write-Host "Smart Office $(Split-Path -Leaf $selectedExe.Name) Installed"
+
+# Get status of services and processes
+$liveSalesServiceStatus = (Get-Service -Name "srvSOLiveSales" -ErrorAction SilentlyContinue).Status
+$pdtWifiStatus = if (Get-Process -Name "PDTWiFi" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
+$pdtWifi64Status = if (Get-Process -Name "PDTWiFi64" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
+
 Write-Host " "
 Write-Host "Completed in $($totalMinutes)m $($totalSeconds)s." -ForegroundColor Green
+Write-Host " "
+
+# Output the status table
+Write-Host "Status Summary:" -ForegroundColor Yellow
+Write-Host "----------------------------------------" -ForegroundColor Yellow
+Write-Host ("{0,-20} {1,-10}" -f "Item", "Status") -ForegroundColor Yellow
+Write-Host ("{0,-20} {1,-10}" -f "--------------------", "----------") -ForegroundColor Yellow
+Write-Host ("{0,-20} {1,-10}" -f "SO Live Sales Service", $liveSalesServiceStatus)
+Write-Host ("{0,-20} {1,-10}" -f "PDTWiFi.exe", $pdtWifiStatus)
+Write-Host ("{0,-20} {1,-10}" -f "PDTWiFi64.exe", $pdtWifi64Status)
+Write-Host "----------------------------------------" -ForegroundColor Yellow
+
 Write-Host " "
 Write-Host "Consider if you need to Reboot at this stage." -ForegroundColor Yellow
 Write-Host " "
