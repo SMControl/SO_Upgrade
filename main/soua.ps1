@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.189" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.192" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -52,23 +52,6 @@ if (-Not (Test-Path $soucExeDestinationPath)) {
 # ==================================
 # Part 2 - Check for Running SO Processes   #### MOVED TO PART 8
 # ==================================
-#Clear-Host
-#Show-Intro
-#Write-Host "[Part 2/15] Checking processes" -ForegroundColor Cyan
-#Write-Host "[██____________________________]" -ForegroundColor Cyan
-#Write-Host ""
-#$processesToCheck = @("Sm32Main", "Sm32")
-#foreach ($process in $processesToCheck) {
-#    # Check if the process is running
-#    $processRunning = Get-Process -Name $process -ErrorAction SilentlyContinue
-#    if ($processRunning) {
-#        Write-Host "Smart Office is open. Please close it to continue." -ForegroundColor Red
-#        while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
-#            # Wait without spamming the terminal
-#            Start-Sleep -Seconds 3  # Check every 3 seconds
-#        }
-#    }
-#}
 
 # ==================================
 # Part 3 - SO_UC.exe // calling module_soget
@@ -125,10 +108,14 @@ $monitorJob = Start-Job -ScriptBlock {
 $ServiceName = "srvSOLiveSales"
 try {
     if ((Get-Service -Name $ServiceName -ErrorAction Stop).Status -eq 'Running') {
-                Stop-Service -Name $ServiceName -Force -ErrorAction Stop
-        Set-Service -Name $ServiceName -StartupType Disabled
-            }
+        Stop-Service -Name $ServiceName -Force -ErrorAction Stop
+        Write-Host "Service '$ServiceName' stopped successfully." -ForegroundColor Green
+    }
+    else{
+        Write-Host "Service '$ServiceName' is not running." -ForegroundColor Yellow
+    }
 } catch {
+    Write-Host "Error stopping service '$ServiceName': $($_.Exception.Message)" -ForegroundColor Red
 }
 
 # ==================================
@@ -322,26 +309,59 @@ try {
     Write-Host "Error setting permissions for Firebird folder." -ForegroundColor Red
 }
 
-# ==================================
 # Part 13 - Revert SO Live Sales Service
-# ==================================
+# PartVersion-1.03
+# -----
 Clear-Host
 Show-Intro
-Write-Host "[Part 13/15] Reverting SO Live Sales service" -ForegroundColor Cyan
+Write-Host "[Part 13/15] SO Live Sales" -ForegroundColor Cyan
 Write-Host "[██████████████████████████____]" -ForegroundColor Cyan
 Write-Host ""
 
 if ($wasRunning) {
+    Write-Host "Service '$ServiceName' was running before. Ensuring it restarts..." -ForegroundColor Yellow
     try {
-        Write-Host "Setting $ServiceName service back to Automatic startup..." -ForegroundColor Yellow
+        Write-Host "Setting '$ServiceName' service back to Automatic startup..." -ForegroundColor Yellow
         Set-Service -Name $ServiceName -StartupType Automatic
-        Start-Service -Name $ServiceName
-        Write-Host "$ServiceName service reverted to its previous state." -ForegroundColor Green
+
+        $retryCount = 0
+        $maxRetries = 5
+        $retryIntervalSeconds = 5
+
+        while ($retryCount -lt $maxRetries) {
+            Write-Host "Attempting to start service '$ServiceName' (Attempt $($retryCount + 1) of $maxRetries)..." -ForegroundColor Yellow
+            Start-Service -Name $ServiceName -ErrorAction SilentlyContinue
+            if ((Get-Service -Name $ServiceName).Status -eq "Running") {
+                Write-Host "Service '$ServiceName' is now running." -ForegroundColor Green
+                break
+            } else {
+                Write-Host "Service '$ServiceName' is not running. Waiting $retryIntervalSeconds seconds before retrying..." -ForegroundColor Yellow
+                Start-Sleep -Seconds $retryIntervalSeconds
+                $retryCount++
+            }
+        }
+
+        if ((Get-Service -Name $ServiceName).Status -ne "Running") {
+            Write-Warning "Failed to automatically start service '$ServiceName' after $maxRetries attempts."
+            Write-Host ""
+            Write-Host "Please manually start the '$ServiceName' service now." -ForegroundColor Red
+            Write-Host "The script will wait until the service is running..." -ForegroundColor Yellow
+
+            while ((Get-Service -Name $ServiceName).Status -ne "Running") {
+                Write-Host "Waiting for '$ServiceName' service to be running. Checking again in 3 seconds..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 3
+            }
+            Write-Host "Service '$ServiceName' is now running. Continuing..." -ForegroundColor Green
+
+        } else {
+            Write-Host "'$ServiceName' service reverted to Automatic and confirmed to be running." -ForegroundColor Green
+        }
+
     } catch {
-        Write-Host "Error reverting service '$ServiceName': $_" -ForegroundColor Red
+        Write-Host "Error encountered while reverting/starting service '$ServiceName': $_" -ForegroundColor Red
     }
 } else {
-    Write-Host "$ServiceName service was not running before, so no action needed." -ForegroundColor Yellow
+    Write-Host "Service '$ServiceName' was not running before, so no action needed." -ForegroundColor Yellow
 }
 
 # ==================================
