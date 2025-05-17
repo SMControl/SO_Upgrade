@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.200" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.201" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -273,11 +273,9 @@ foreach ($process in $processesToCheck) {
 
 # ==================================
 # Part 11 - Set Permissions for SM Folder
-# PartVersion-1.09
-# - Launch icacls in a new PowerShell window, positioned to the side.
-# - Wait for the icacls process in the new window to complete.
-# - Close the new PowerShell window after icacls finishes.
-# - Adjusted new window position to open 300 pixels to the right.
+# PartVersion-1.10
+# - Reverted to the original icacls command for setting permissions.
+# - Added a message to the user about potential delays.
 # ==================================
 Clear-Host
 Show-Intro
@@ -285,42 +283,12 @@ Write-Host "[Part 11/15] Setting permissions for Stationmaster folder. Please Wa
 Write-Host "[██████████████████████________]" -ForegroundColor Cyan
 Write-Host ""
 
-$folderPath = "C:\Program Files (x86)\StationMaster"
-$permission = "*S-1-1-0:(OI)(CI)F"
-
-# Determine current window position
-$currentWindow = Get-Host | Select-Object -ExpandProperty UI | Select-Object -ExpandProperty Window
-$currentX = $currentWindow.Left
-$currentY = $currentWindow.Top
-$currentWidth = $currentWindow.Width
-
-# Calculate position for the new window (e.g., to the right)
-$newX = $currentX + $currentWidth + 300 # Add 300 pixels for spacing
-$newY = $currentY
-
-# Start icacls in a new PowerShell window and wait for it to finish
-$process = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "& { icacls '$folderPath' /grant '$permission' /T /C }" -WindowStyle Normal -Wait -PassThru
-
-# Specify window position
-Add-Type -AssemblyName "System.Windows.Forms"
-$newWindow = [System.Windows.Forms.Form]::ActiveForm
-if ($newWindow)
-{
-    $newWindow.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual;
-    $newWindow.Location = New-Object System.Drawing.Point($newX, $newY);
+Write-Host "Please wait, this task may take ~1-30+ minutes to complete depending on PC speed. Do not interrupt."
+try {
+    & icacls "C:\Program Files (x86)\StationMaster" /grant "*S-1-1-0:(OI)(CI)F" /T /C > $null
+} catch {
+    Write-Host "Error setting permissions for SM folder: $_" -ForegroundColor Red
 }
-
-# Check the exit code of the icacls process
-if ($process.ExitCode -eq 0) {
-    Write-Host "Permissions set successfully for StationMaster folder." -ForegroundColor Green
-} else {
-    Write-Host "Error setting permissions for StationMaster folder.  icacls exited with code $($process.ExitCode)" -ForegroundColor Red
-}
-
-# Close the new PowerShell window
-$process.CloseMainWindow() | Out-Null
-$process.Dispose()
-
 
 
 # ==================================
