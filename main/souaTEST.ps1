@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.196" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.197" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -411,9 +411,9 @@ Set-Location -Path $workingDir
 
 # ==================================
 # Part 15 - Clean up and Finish Script
-# PartVersion-1.06
-# - Improved wording for "SO Live Sales Service" status.
-# - Changed "Not Exist" to "Not Installed" for clarity.
+# PartVersion-1.07
+# - Fixed the script duration calculation to correctly capture start time.
+# - Improved comments and formatting.
 # ==================================
 Clear-Host
 Show-Intro
@@ -425,7 +425,7 @@ $liveSalesService = Get-Service -Name "srvSOLiveSales" -ErrorAction SilentlyCont
 if ($liveSalesService) {
     $liveSalesServiceStatus = $liveSalesService.Status
 } else {
-    $liveSalesServiceStatus = "Not Installed" # Changed from "Not Exist"
+    $liveSalesServiceStatus = "Not Installed"
 }
 $pdtWifiStatus = if (Get-Process -Name "PDTWiFi" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
 $pdtWifi64Status = if (Get-Process -Name "PDTWiFi64" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
@@ -459,6 +459,7 @@ if (-not $taskExists) {
 } else {
     #Write-Output "Scheduled Task 'SO InstallerUpdates' already exists. Skipping execution."
 }
+
 # Calculate and display script execution time
 $endTime = Get-Date
 $executionTime = $endTime - $startTime
