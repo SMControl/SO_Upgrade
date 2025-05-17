@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.197" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.198" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -281,6 +281,10 @@ foreach ($process in $processesToCheck) {
 
 # ==================================
 # Part 11 - Set Permissions for SM Folder
+# PartVersion-1.06
+# - Reverted to the original icacls command for setting permissions.
+# - Added CPU usage monitoring for the icacls.exe process *after* the command.
+# - Added a message to the user about potential delays.
 # ==================================
 Clear-Host
 Show-Intro
@@ -288,11 +292,37 @@ Write-Host "[Part 11/15] Setting permissions for Stationmaster folder. Please Wa
 Write-Host "[██████████████████████________]" -ForegroundColor Cyan
 Write-Host ""
 
+$folderPath = "C:\Program Files (x86)\StationMaster"
+$permission = "*S-1-1-0:(OI)(CI)F"
+
 try {
-    & icacls "C:\Program Files (x86)\StationMaster" /grant "*S-1-1-0:(OI)(CI)F" /T /C > $null
+    # Original icacls command to set permissions
+    & icacls "$folderPath" /grant "$permission" /T /C > $null
+
+    Write-Host "Setting permissions... This may take a while, depending on your machine's speed.`n" -ForegroundColor Yellow
+    # Start monitoring CPU usage of icacls.exe
+    $icaclsProcess = Get-Process -Name "icacls" -ErrorAction SilentlyContinue
+
+    if ($icaclsProcess) {
+        while (-not $icaclsProcess.HasExited) {
+            $cpuUsage = (Get-Counter -Counter "\Process($($icaclsProcess.ProcessName))\CPU Usage %" -SampleInterval 1 |
+                Select-Object -ExpandProperty CounterSamples |
+                Select-Object -ExpandProperty CookedValue)
+            Write-Progress -Activity "Setting Permissions" -Status "icacls CPU Usage: $([math]::Round($cpuUsage, 2))%" -PercentComplete 0
+            Start-Sleep -Seconds 1
+        }
+        Write-Host "Permissions set successfully for StationMaster folder." -ForegroundColor Green
+    }
+    else {
+        Write-Host "icacls process not found." -ForegroundColor Yellow
+        Write-Host "Permissions set successfully for StationMaster folder." -ForegroundColor Green
+    }
+
+
 } catch {
     Write-Host "Error setting permissions for SM folder: $_" -ForegroundColor Red
 }
+
 
 # ==================================
 # Part 12 - Set Permissions for Firebird Folder
