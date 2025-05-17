@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.195" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.196" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -411,11 +411,9 @@ Set-Location -Path $workingDir
 
 # ==================================
 # Part 15 - Clean up and Finish Script
-# PartVersion-1.05
-# - Changed table name to "Process Status".
-# - Adjusted spacing before the table.
-# - Modified Live Sales service status check to account for "Not Exist" status.
-# - Color-coded Live Sales service status: Green for "Running", Yellow for others.
+# PartVersion-1.06
+# - Improved wording for "SO Live Sales Service" status.
+# - Changed "Not Exist" to "Not Installed" for clarity.
 # ==================================
 Clear-Host
 Show-Intro
@@ -427,7 +425,7 @@ $liveSalesService = Get-Service -Name "srvSOLiveSales" -ErrorAction SilentlyCont
 if ($liveSalesService) {
     $liveSalesServiceStatus = $liveSalesService.Status
 } else {
-    $liveSalesServiceStatus = "Not Exist"
+    $liveSalesServiceStatus = "Not Installed" # Changed from "Not Exist"
 }
 $pdtWifiStatus = if (Get-Process -Name "PDTWiFi" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
 $pdtWifi64Status = if (Get-Process -Name "PDTWiFi64" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
