@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.193" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.194" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -411,13 +411,41 @@ Set-Location -Path $workingDir
 
 # ==================================
 # Part 15 - Clean up and Finish Script
-# PartVersion-1.03
-# - Added status summary of Live Sales service and PDTWiFi processes.
+# PartVersion-1.04
+# - Moved status summary table before script end time calculation.
+# - Widened columns in the status table.
+# - Added color-coding to status values (Green for "Running", Yellow for others).
 # ==================================
 Clear-Host
 Show-Intro
 Write-Host "[Part 15/15] Clean up and finish" -ForegroundColor Cyan
 Write-Host "[██████████████████████████████]" -ForegroundColor Cyan
+
+# Get status of services and processes
+$liveSalesServiceStatus = (Get-Service -Name "srvSOLiveSales" -ErrorAction SilentlyContinue).Status
+$pdtWifiStatus = if (Get-Process -Name "PDTWiFi" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
+$pdtWifi64Status = if (Get-Process -Name "PDTWiFi64" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
+
+# Output the status table
+Write-Host "Status Summary:" -ForegroundColor Yellow
+Write-Host "------------------------------------------------" -ForegroundColor Yellow
+Write-Host ("{0,-25} {1,-15}" -f "Item", "Status") -ForegroundColor Yellow
+Write-Host ("{0,-25} {1,-15}" -f "-------------------------", "---------------") -ForegroundColor Yellow
+
+# Function to determine status color
+function Get-StatusColor ($status) {
+    if ($status -eq "Running") {
+        return "Green"
+    } else {
+        return "Yellow"
+    }
+}
+
+Write-Host ("{0,-25} {1,-15}" -f "SO Live Sales Service", $liveSalesServiceStatus) -ForegroundColor (Get-StatusColor $liveSalesServiceStatus)
+Write-Host ("{0,-25} {1,-15}" -f "PDTWiFi.exe", $pdtWifiStatus) -ForegroundColor (Get-StatusColor $pdtWifiStatus)
+Write-Host ("{0,-25} {1,-15}" -f "PDTWiFi64.exe", $pdtWifi64Status) -ForegroundColor (Get-StatusColor $pdtWifi64Status)
+
+Write-Host "------------------------------------------------" -ForegroundColor Yellow
 
 # Run SO_UC.exe if it's Task doesn't exist.
 $taskExists = Get-ScheduledTask -TaskName "SO InstallerUpdates" -ErrorAction SilentlyContinue
@@ -432,25 +460,8 @@ $executionTime = $endTime - $startTime
 $totalMinutes = [math]::Floor($executionTime.TotalMinutes)
 $totalSeconds = $executionTime.Seconds
 
-# Get status of services and processes
-$liveSalesServiceStatus = (Get-Service -Name "srvSOLiveSales" -ErrorAction SilentlyContinue).Status
-$pdtWifiStatus = if (Get-Process -Name "PDTWiFi" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
-$pdtWifi64Status = if (Get-Process -Name "PDTWiFi64" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
-
 Write-Host " "
 Write-Host "Completed in $($totalMinutes)m $($totalSeconds)s." -ForegroundColor Green
-Write-Host " "
-
-# Output the status table
-Write-Host "Status Summary:" -ForegroundColor Yellow
-Write-Host "----------------------------------------" -ForegroundColor Yellow
-Write-Host ("{0,-20} {1,-10}" -f "Item", "Status") -ForegroundColor Yellow
-Write-Host ("{0,-20} {1,-10}" -f "--------------------", "----------") -ForegroundColor Yellow
-Write-Host ("{0,-20} {1,-10}" -f "SO Live Sales Service", $liveSalesServiceStatus)
-Write-Host ("{0,-20} {1,-10}" -f "PDTWiFi.exe", $pdtWifiStatus)
-Write-Host ("{0,-20} {1,-10}" -f "PDTWiFi64.exe", $pdtWifi64Status)
-Write-Host "----------------------------------------" -ForegroundColor Yellow
-
 Write-Host " "
 Write-Host "Consider if you need to Reboot at this stage." -ForegroundColor Yellow
 Write-Host " "
@@ -465,3 +476,4 @@ if ($key.VirtualKeyCode -eq 13) {
 } else {
     Write-Host "Exiting..."
 }
+
