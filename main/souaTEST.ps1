@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.194" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.195" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -411,10 +411,11 @@ Set-Location -Path $workingDir
 
 # ==================================
 # Part 15 - Clean up and Finish Script
-# PartVersion-1.04
-# - Moved status summary table before script end time calculation.
-# - Widened columns in the status table.
-# - Added color-coding to status values (Green for "Running", Yellow for others).
+# PartVersion-1.05
+# - Changed table name to "Process Status".
+# - Adjusted spacing before the table.
+# - Modified Live Sales service status check to account for "Not Exist" status.
+# - Color-coded Live Sales service status: Green for "Running", Yellow for others.
 # ==================================
 Clear-Host
 Show-Intro
@@ -422,12 +423,18 @@ Write-Host "[Part 15/15] Clean up and finish" -ForegroundColor Cyan
 Write-Host "[██████████████████████████████]" -ForegroundColor Cyan
 
 # Get status of services and processes
-$liveSalesServiceStatus = (Get-Service -Name "srvSOLiveSales" -ErrorAction SilentlyContinue).Status
+$liveSalesService = Get-Service -Name "srvSOLiveSales" -ErrorAction SilentlyContinue
+if ($liveSalesService) {
+    $liveSalesServiceStatus = $liveSalesService.Status
+} else {
+    $liveSalesServiceStatus = "Not Exist"
+}
 $pdtWifiStatus = if (Get-Process -Name "PDTWiFi" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
 $pdtWifi64Status = if (Get-Process -Name "PDTWiFi64" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
 
 # Output the status table
-Write-Host "Status Summary:" -ForegroundColor Yellow
+Write-Host " "
+Write-Host "Process Status:" -ForegroundColor Yellow
 Write-Host "------------------------------------------------" -ForegroundColor Yellow
 Write-Host ("{0,-25} {1,-15}" -f "Item", "Status") -ForegroundColor Yellow
 Write-Host ("{0,-25} {1,-15}" -f "-------------------------", "---------------") -ForegroundColor Yellow
@@ -476,4 +483,3 @@ if ($key.VirtualKeyCode -eq 13) {
 } else {
     Write-Host "Exiting..."
 }
-
