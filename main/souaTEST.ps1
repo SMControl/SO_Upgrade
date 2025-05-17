@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.99" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.200" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -273,8 +273,11 @@ foreach ($process in $processesToCheck) {
 
 # ==================================
 # Part 11 - Set Permissions for SM Folder
-# PartVersion-1.08
+# PartVersion-1.09
 # - Launch icacls in a new PowerShell window, positioned to the side.
+# - Wait for the icacls process in the new window to complete.
+# - Close the new PowerShell window after icacls finishes.
+# - Adjusted new window position to open 300 pixels to the right.
 # ==================================
 Clear-Host
 Show-Intro
@@ -292,11 +295,12 @@ $currentY = $currentWindow.Top
 $currentWidth = $currentWindow.Width
 
 # Calculate position for the new window (e.g., to the right)
-$newX = $currentX + $currentWidth + 10  # Add 10 pixels for spacing
+$newX = $currentX + $currentWidth + 300 # Add 300 pixels for spacing
 $newY = $currentY
 
-# Start icacls in a new PowerShell window
-Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "& { icacls '$folderPath' /grant '$permission' /T /C }" -WindowStyle Normal
+# Start icacls in a new PowerShell window and wait for it to finish
+$process = Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "& { icacls '$folderPath' /grant '$permission' /T /C }" -WindowStyle Normal -Wait -PassThru
+
 # Specify window position
 Add-Type -AssemblyName "System.Windows.Forms"
 $newWindow = [System.Windows.Forms.Form]::ActiveForm
@@ -306,7 +310,16 @@ if ($newWindow)
     $newWindow.Location = New-Object System.Drawing.Point($newX, $newY);
 }
 
-Write-Host "icacls command started in a new PowerShell window.  This may take a while, depending on your machine's speed.  Do not interrupt the process in the new window." -ForegroundColor Yellow
+# Check the exit code of the icacls process
+if ($process.ExitCode -eq 0) {
+    Write-Host "Permissions set successfully for StationMaster folder." -ForegroundColor Green
+} else {
+    Write-Host "Error setting permissions for StationMaster folder.  icacls exited with code $($process.ExitCode)" -ForegroundColor Red
+}
+
+# Close the new PowerShell window
+$process.CloseMainWindow() | Out-Null
+$process.Dispose()
 
 
 
