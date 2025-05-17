@@ -1,10 +1,26 @@
+Write-Host "SOUpgradeAssistant.ps1 - Version 1.202"
+# This script automates the upgrade process for Smart Office (SO) software.
+#
+# Recent Changes:
+# - Updated script to version 1.201.
+# - Fixed the script duration calculation.
+# - Improved comments and formatting.
+# - Added a message to the user about potential delays in Part 11.
+# - Added SO_UC.exe download
+# - Changed SO_UC execution
+# - Added check for SO_UC scheduled task and execute if not exists
+# - Added logic to handle SO Live Sales service startup more robustly.
+
 # Initialize script start time
 $startTime = Get-Date
+
+# Function to display the script's introduction
 function Show-Intro {
     Write-Host "SO Upgrade Assistant - Version 1.201" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
+
 # Set the working directory
 $workingDir = "C:\winsm"
 if (-not (Test-Path $workingDir -PathType Container)) {
@@ -19,6 +35,8 @@ Set-Location -Path $workingDir
 
 # ==================================
 # Part 1 - Check for Admin Rights
+# PartVersion-1.00
+# - Initial version.
 # ==================================
 Clear-Host
 Show-Intro
@@ -26,10 +44,13 @@ Write-Host "[Part 1/15] System Pre-Checks" -ForegroundColor Cyan
 Write-Host "[______________________________]" -ForegroundColor Cyan
 Write-Host ""
 
+# Function to test for administrator privileges
 function Test-Admin {
     $currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     return $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
+
+# Check if the script is running with administrator rights
 if (-not (Test-Admin)) {
     Write-Host "Error: Administrator rights required to run this script. Exiting." -ForegroundColor Red
     pause
@@ -43,10 +64,10 @@ if (-Not (Test-Path $soucExeDestinationPath)) {
     Invoke-WebRequest -Uri $soucExeUrl -OutFile $soucExeDestinationPath
 }
 
-# Part 2 - Check for Running SO Processes   #### MOVED TO PART 8
-
 # ==================================
 # Part 3 - SO_UC.exe // calling module_soget
+# PartVersion-1.00
+# - Initial version.
 # ==================================
 Clear-Host
 Show-Intro
@@ -61,6 +82,8 @@ Invoke-Expression (Invoke-RestMethod -Uri $sogetScriptURL)
 
 # ==================================
 # Part 4 - Firebird Installation // calling module_firebird
+# PartVersion-1.00
+# - Initial version.
 # ==================================
 Clear-Host
 Show-Intro
@@ -79,6 +102,8 @@ if (-not (Test-Path $firebirdDir)) {
 
 # ==================================
 # Part 5 - Stop SMUpdates if Running
+# PartVersion-1.00
+# - Initial version.
 # ==================================
 $monitorJob = Start-Job -ScriptBlock {
     function Monitor-SmUpdates {
@@ -96,6 +121,8 @@ $monitorJob = Start-Job -ScriptBlock {
 
 # ==================================
 # Part 6 - Manage SO Live Sales Service
+# PartVersion-1.00
+# - Initial version.
 # ==================================
 $ServiceName = "srvSOLiveSales"
 try {
@@ -112,9 +139,9 @@ try {
 
 # ==================================
 # Part 7 - Manage PDTWiFi Processes
+# PartVersion-1.02
+# - Total redo
 # ==================================
-# PartVersion_1.02
-# - total redo
 Clear-Host
 Show-Intro
 Write-Host "[Part 7/15] Managing PDTWiFi processes" -ForegroundColor Cyan
@@ -148,6 +175,8 @@ if ($pdtWiFi64Process) {
 
 # ==================================
 # Part 8 - Make Sure SO is closed & Wait for Single Instance of Firebird.exe
+# PartVersion-1.00
+# - Initial version.
 # ==================================
 Clear-Host
 Show-Intro
@@ -188,8 +217,8 @@ WaitForSingleFirebirdInstance
 # ==================================
 # Part 9 - Launch Setup
 # PartVersion 1.04
+# - Improved terminal selection menu with colors and table formatting
 # ==================================
-# Improved terminal selection menu with colors and table formatting
 Clear-Host
 Show-Intro
 Write-Host "[Part 9/15] Launching SO setup..." -ForegroundColor Cyan
@@ -250,6 +279,8 @@ try {
 
 # ==================================
 # Part 10 - Wait for User Confirmation
+# PartVersion-1.00
+# - Initial version.
 # ==================================
 Clear-Host
 Show-Intro
@@ -293,6 +324,8 @@ try {
 
 # ==================================
 # Part 12 - Set Permissions for Firebird Folder
+# PartVersion-1.00
+# - Initial version.
 # ==================================
 Clear-Host
 Show-Intro
@@ -306,9 +339,11 @@ try {
     Write-Host "Error setting permissions for Firebird folder." -ForegroundColor Red
 }
 
+# ==================================
 # Part 13 - Revert SO Live Sales Service
 # PartVersion-1.03
-# -----
+# - Added retry logic and improved error handling.
+# ==================================
 Clear-Host
 Show-Intro
 Write-Host "[Part 13/15] SO Live Sales" -ForegroundColor Cyan
@@ -363,9 +398,9 @@ if ($wasRunning) {
 
 # ==================================
 # Part 14 - Revert PDTWiFi Processes
-# ==================================
 # PartVersion 1.02
-# - total re-do
+# - Total re-do
+# ==================================
 Clear-Host
 Show-Intro
 Write-Host "[Part 14/15] Reverting PDTWiFi processes" -ForegroundColor Cyan
@@ -386,25 +421,6 @@ if ($PDTWiFiStates[$PDTWiFi64] -eq "Running") {
 } else {
     Write-Host "$PDTWiFi64 was not running, no action taken." -ForegroundColor Yellow
 }
-
-# Initialize script start time
-$startTime = Get-Date
-function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.193" -ForegroundColor Green
-    Write-Host "--------------------------------------------------------------------------------"
-    Write-Host ""
-}
-# Set the working directory
-$workingDir = "C:\winsm"
-if (-not (Test-Path $workingDir -PathType Container)) {
-    try {
-        New-Item -Path $workingDir -ItemType Directory -ErrorAction Stop | Out-Null
-    } catch {
-        Write-Host "Error: Unable to create directory $workingDir" -ForegroundColor Red
-        exit
-    }
-}
-Set-Location -Path $workingDir
 
 # ==================================
 # Part 15 - Clean up and Finish Script
