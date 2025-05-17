@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.198" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.99" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -35,13 +35,7 @@ if (-not (Test-Admin)) {
     pause
     exit
 }
-# Download the SmartOffice_Upgrade_Assistant.exe and save it to C:\winsm
-#$assistantExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SmartOffice_Upgrade_Assistant.exe?raw=true"
-#$assistantExeDestinationPath = "C:\winsm\SmartOffice_Upgrade_Assistant.exe"
-#if (-Not (Test-Path $assistantExeDestinationPath)) {
-#    Invoke-WebRequest -Uri $assistantExeUrl -OutFile $assistantExeDestinationPath
-#} else {
-#}
+
 # Download the SO_UC.exe and save it to C:\winsm
 $soucExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SO_UC.exe?raw=true"
 $soucExeDestinationPath = "C:\winsm\SO_UC.exe"
@@ -49,9 +43,7 @@ if (-Not (Test-Path $soucExeDestinationPath)) {
     Invoke-WebRequest -Uri $soucExeUrl -OutFile $soucExeDestinationPath
 }
 
-# ==================================
 # Part 2 - Check for Running SO Processes   #### MOVED TO PART 8
-# ==================================
 
 # ==================================
 # Part 3 - SO_UC.exe // calling module_soget
@@ -281,10 +273,8 @@ foreach ($process in $processesToCheck) {
 
 # ==================================
 # Part 11 - Set Permissions for SM Folder
-# PartVersion-1.06
-# - Reverted to the original icacls command for setting permissions.
-# - Added CPU usage monitoring for the icacls.exe process *after* the command.
-# - Added a message to the user about potential delays.
+# PartVersion-1.08
+# - Launch icacls in a new PowerShell window, positioned to the side.
 # ==================================
 Clear-Host
 Show-Intro
@@ -295,33 +285,29 @@ Write-Host ""
 $folderPath = "C:\Program Files (x86)\StationMaster"
 $permission = "*S-1-1-0:(OI)(CI)F"
 
-try {
-    # Original icacls command to set permissions
-    & icacls "$folderPath" /grant "$permission" /T /C > $null
+# Determine current window position
+$currentWindow = Get-Host | Select-Object -ExpandProperty UI | Select-Object -ExpandProperty Window
+$currentX = $currentWindow.Left
+$currentY = $currentWindow.Top
+$currentWidth = $currentWindow.Width
 
-    Write-Host "Setting permissions... This may take a while, depending on your machine's speed.`n" -ForegroundColor Yellow
-    # Start monitoring CPU usage of icacls.exe
-    $icaclsProcess = Get-Process -Name "icacls" -ErrorAction SilentlyContinue
+# Calculate position for the new window (e.g., to the right)
+$newX = $currentX + $currentWidth + 10  # Add 10 pixels for spacing
+$newY = $currentY
 
-    if ($icaclsProcess) {
-        while (-not $icaclsProcess.HasExited) {
-            $cpuUsage = (Get-Counter -Counter "\Process($($icaclsProcess.ProcessName))\CPU Usage %" -SampleInterval 1 |
-                Select-Object -ExpandProperty CounterSamples |
-                Select-Object -ExpandProperty CookedValue)
-            Write-Progress -Activity "Setting Permissions" -Status "icacls CPU Usage: $([math]::Round($cpuUsage, 2))%" -PercentComplete 0
-            Start-Sleep -Seconds 1
-        }
-        Write-Host "Permissions set successfully for StationMaster folder." -ForegroundColor Green
-    }
-    else {
-        Write-Host "icacls process not found." -ForegroundColor Yellow
-        Write-Host "Permissions set successfully for StationMaster folder." -ForegroundColor Green
-    }
-
-
-} catch {
-    Write-Host "Error setting permissions for SM folder: $_" -ForegroundColor Red
+# Start icacls in a new PowerShell window
+Start-Process -FilePath "powershell.exe" -ArgumentList "-NoExit", "-Command", "& { icacls '$folderPath' /grant '$permission' /T /C }" -WindowStyle Normal
+# Specify window position
+Add-Type -AssemblyName "System.Windows.Forms"
+$newWindow = [System.Windows.Forms.Form]::ActiveForm
+if ($newWindow)
+{
+    $newWindow.StartPosition = [System.Windows.Forms.FormStartPosition]::Manual;
+    $newWindow.Location = New-Object System.Drawing.Point($newX, $newY);
 }
+
+Write-Host "icacls command started in a new PowerShell window.  This may take a while, depending on your machine's speed.  Do not interrupt the process in the new window." -ForegroundColor Yellow
+
 
 
 # ==================================
