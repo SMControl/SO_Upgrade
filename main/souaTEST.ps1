@@ -1,7 +1,7 @@
 # Initialize script start time
 $startTime = Get-Date
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.191" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.192" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -117,8 +117,6 @@ try {
 } catch {
     Write-Host "Error stopping service '$ServiceName': $($_.Exception.Message)" -ForegroundColor Red
 }
-
-Start-Sleep -Seconds 10 # SLEEP ADDED FOR TESTING
 
 # ==================================
 # Part 7 - Manage PDTWiFi Processes
@@ -365,7 +363,6 @@ if ($wasRunning) {
 } else {
     Write-Host "Service '$ServiceName' was not running before, so no action needed." -ForegroundColor Yellow
 }
-Start-Sleep -Seconds 10 # SLEEP ADDED FOR TESTING
 
 # ==================================
 # Part 14 - Revert PDTWiFi Processes
