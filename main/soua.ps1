@@ -1,4 +1,4 @@
-Write-Host "SOUpgradeAssistant.ps1 - Version 1.202"
+Write-Host "SOUpgradeAssistant.ps1 - Version 1.203"
 # This script automates the upgrade process for Smart Office (SO) software.
 #
 # Recent Changes:
@@ -16,7 +16,7 @@ $startTime = Get-Date
 
 # Function to display the script's introduction
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.201" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.203" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
