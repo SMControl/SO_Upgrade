@@ -1,8 +1,8 @@
-Write-Host "SOUpgradeAssistant.ps1 - Version 1.204"
+Write-Host "SOUpgradeAssistant.ps1 - Version 1.205"
 # This script automates the upgrade process for Smart Office (SO) software.
 #
 # Recent Changes:
-# - Updated script to version 1.203.
+# - Updated script to version 1.205.
 # - Fixed the script duration calculation.
 # - Improved comments and formatting.
 # - Added a message to the user about potential delays in Part 11.
@@ -10,13 +10,14 @@ Write-Host "SOUpgradeAssistant.ps1 - Version 1.204"
 # - Changed SO_UC execution
 # - Added check for SO_UC scheduled task and execute if not exists
 # - Added logic to handle SO Live Sales service startup more robustly.
+# - Changed Part 9 to prevent window closure on cancel.
 
 # Initialize script start time
 $startTime = Get-Date
 
 # Function to display the script's introduction
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.204" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.205" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -223,8 +224,10 @@ WaitForSingleFirebirdInstance
 
 # ==================================
 # Part 9 - Launch Setup
-# PartVersion 1.04
+# PartVersion 1.06
 # - Improved terminal selection menu with colors and table formatting
+# - Changed logic to prevent script termination on cancel
+# - Script now stops, but does not exit, on cancel.
 #LOCK=OFF
 # ==================================
 Clear-Host
@@ -264,8 +267,8 @@ if ($setupExes.Count -eq 0) {
     $selection = Read-Host "Selection"
     # Check if the user wants to cancel
     if ([string]::IsNullOrWhiteSpace($selection)) {
-        Write-Host "Operation cancelled. Exiting." -ForegroundColor Red
-        exit
+        Write-Host "Operation cancelled. Script execution stopped." -ForegroundColor Red
+        return  # Exit the current part, and stop the script.
     }
     # Validate the selection
     if ($selection -match '^\d+$' -and $selection -ge 1 -and $selection -le $setupExes.Count) {
@@ -273,7 +276,7 @@ if ($setupExes.Count -eq 0) {
         Write-Host "Selected setup executable: $($selectedExe.Name)" -ForegroundColor Green
     } else {
         Write-Host "Invalid selection. Exiting." -ForegroundColor Red
-        exit
+        exit # Exits the entire script
     }
 }
 # Launch the selected setup executable
