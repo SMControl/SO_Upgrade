@@ -1,8 +1,8 @@
-Write-Host "SOUpgradeAssistant.ps1 - Version 1.203"
+Write-Host "SOUpgradeAssistant.ps1 - Version 1.204"
 # This script automates the upgrade process for Smart Office (SO) software.
 #
 # Recent Changes:
-# - Updated script to version 1.201.
+# - Updated script to version 1.203.
 # - Fixed the script duration calculation.
 # - Improved comments and formatting.
 # - Added a message to the user about potential delays in Part 11.
@@ -16,7 +16,7 @@ $startTime = Get-Date
 
 # Function to display the script's introduction
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.203" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.204" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -37,6 +37,7 @@ Set-Location -Path $workingDir
 # Part 1 - Check for Admin Rights
 # PartVersion-1.00
 # - Initial version.
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -68,6 +69,7 @@ if (-Not (Test-Path $soucExeDestinationPath)) {
 # Part 3 - SO_UC.exe // calling module_soget
 # PartVersion-1.00
 # - Initial version.
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -84,6 +86,7 @@ Invoke-Expression (Invoke-RestMethod -Uri $sogetScriptURL)
 # Part 4 - Firebird Installation // calling module_firebird
 # PartVersion-1.00
 # - Initial version.
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -104,6 +107,7 @@ if (-not (Test-Path $firebirdDir)) {
 # Part 5 - Stop SMUpdates if Running
 # PartVersion-1.00
 # - Initial version.
+#LOCK=OFF
 # ==================================
 $monitorJob = Start-Job -ScriptBlock {
     function Monitor-SmUpdates {
@@ -123,6 +127,7 @@ $monitorJob = Start-Job -ScriptBlock {
 # Part 6 - Manage SO Live Sales Service
 # PartVersion-1.00
 # - Initial version.
+#LOCK=OFF
 # ==================================
 $ServiceName = "srvSOLiveSales"
 try {
@@ -141,6 +146,7 @@ try {
 # Part 7 - Manage PDTWiFi Processes
 # PartVersion-1.02
 # - Total redo
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -177,6 +183,7 @@ if ($pdtWiFi64Process) {
 # Part 8 - Make Sure SO is closed & Wait for Single Instance of Firebird.exe
 # PartVersion-1.00
 # - Initial version.
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -218,6 +225,7 @@ WaitForSingleFirebirdInstance
 # Part 9 - Launch Setup
 # PartVersion 1.04
 # - Improved terminal selection menu with colors and table formatting
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -281,6 +289,7 @@ try {
 # Part 10 - Wait for User Confirmation
 # PartVersion-1.00
 # - Initial version.
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -307,6 +316,7 @@ foreach ($process in $processesToCheck) {
 # PartVersion-1.10
 # - Reverted to the original icacls command for setting permissions.
 # - Added a message to the user about potential delays.
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -326,6 +336,7 @@ try {
 # Part 12 - Set Permissions for Firebird Folder
 # PartVersion-1.00
 # - Initial version.
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -343,6 +354,7 @@ try {
 # Part 13 - Revert SO Live Sales Service
 # PartVersion-1.03
 # - Added retry logic and improved error handling.
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -400,6 +412,7 @@ if ($wasRunning) {
 # Part 14 - Revert PDTWiFi Processes
 # PartVersion 1.02
 # - Total re-do
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
@@ -427,6 +440,7 @@ if ($PDTWiFiStates[$PDTWiFi64] -eq "Running") {
 # PartVersion-1.07
 # - Fixed the script duration calculation to correctly capture start time.
 # - Improved comments and formatting.
+#LOCK=OFF
 # ==================================
 Clear-Host
 Show-Intro
