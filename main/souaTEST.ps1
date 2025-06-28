@@ -1,8 +1,10 @@
-Write-Host "SOUpgradeAssistant.ps1 - Version 1.205"
+Write-Host "SOUpgradeAssistant.ps1 - Version 1.209"
 # This script automates the upgrade process for Smart Office (SO) software.
 #
 # Recent Changes:
-# - Updated script to version 1.205.
+# - Updated script to version 1.209.
+# - Incorporated the latest Part 6 (stopping service) and Part 13 (starting service).
+# - Set LOCK=ON for all parts.
 # - Fixed the script duration calculation.
 # - Improved comments and formatting.
 # - Added a message to the user about potential delays in Part 11.
@@ -11,13 +13,15 @@ Write-Host "SOUpgradeAssistant.ps1 - Version 1.205"
 # - Added check for SO_UC scheduled task and execute if not exists
 # - Added logic to handle SO Live Sales service startup more robustly.
 # - Changed Part 9 to prevent window closure on cancel.
+# - Initialized $wasRunning variable for Part 6.
+# - Uncommented feedback message in Part 15 for scheduled task check.
 
 # Initialize script start time
 $startTime = Get-Date
 
 # Function to display the script's introduction
 function Show-Intro {
-    Write-Host "SO Upgrade Assistant - Version 1.205" -ForegroundColor Green
+    Write-Host "SO Upgrade Assistant - Version 1.209" -ForegroundColor Green
     Write-Host "--------------------------------------------------------------------------------"
     Write-Host ""
 }
@@ -38,7 +42,7 @@ Set-Location -Path $workingDir
 # Part 1 - Check for Admin Rights
 # PartVersion-1.00
 # - Initial version.
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -63,14 +67,23 @@ if (-not (Test-Admin)) {
 $soucExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SO_UC.exe?raw=true"
 $soucExeDestinationPath = "C:\winsm\SO_UC.exe"
 if (-Not (Test-Path $soucExeDestinationPath)) {
-    Invoke-WebRequest -Uri $soucExeUrl -OutFile $soucExeDestinationPath
+    Write-Host "Downloading SO_UC.exe..." -ForegroundColor Yellow
+    try {
+        Invoke-WebRequest -Uri $soucExeUrl -OutFile $soucExeDestinationPath -ErrorAction Stop
+        Write-Host "SO_UC.exe downloaded successfully to $soucExeDestinationPath." -ForegroundColor Green
+    } catch {
+        Write-Host "Error downloading SO_UC.exe: $($_.Exception.Message)" -ForegroundColor Red
+        exit
+    }
+} else {
+    Write-Host "SO_UC.exe already exists at $soucExeDestinationPath. Skipping download." -ForegroundColor Yellow
 }
 
 # ==================================
 # Part 3 - SO_UC.exe // calling module_soget
 # PartVersion-1.00
 # - Initial version.
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -81,13 +94,21 @@ Start-Sleep -Seconds 1
 # Define the URL for the SO Get module
 $sogetScriptURL = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_soget.ps1"
 # Run module_soget directly in the current shell
-Invoke-Expression (Invoke-RestMethod -Uri $sogetScriptURL)
+try {
+    Write-Host "Invoking module_soget.ps1..." -ForegroundColor Yellow
+    Invoke-Expression (Invoke-RestMethod -Uri $sogetScriptURL -ErrorAction Stop)
+    Write-Host "module_soget.ps1 executed successfully." -ForegroundColor Green
+} catch {
+    Write-Host "Error executing module_soget.ps1: $($_.Exception.Message)" -ForegroundColor Red
+    exit
+}
+
 
 # ==================================
 # Part 4 - Firebird Installation // calling module_firebird
 # PartVersion-1.00
 # - Initial version.
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -101,21 +122,37 @@ $firebirdInstallerURL = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/
 $firebirdDir = "C:\Program Files (x86)\Firebird"
 if (-not (Test-Path $firebirdDir)) {
     Write-Host "Firebird not found. Installing Firebird..." -ForegroundColor Yellow
-    Invoke-Expression (Invoke-RestMethod -Uri $firebirdInstallerURL)
+    try {
+        Invoke-Expression (Invoke-RestMethod -Uri $firebirdInstallerURL -ErrorAction Stop)
+        Write-Host "Firebird installation script executed successfully." -ForegroundColor Green
+    } catch {
+        Write-Host "Error executing Firebird installation script: $($_.Exception.Message)" -ForegroundColor Red
+        exit
+    }
+} else {
+    Write-Host "Firebird is already installed." -ForegroundColor Green
 }
 
 # ==================================
 # Part 5 - Stop SMUpdates if Running
 # PartVersion-1.00
 # - Initial version.
-#LOCK=OFF
+#LOCK=ON
 # ==================================
+Clear-Host
+Show-Intro
+Write-Host "[Part 5/15] Monitoring and Stopping SMUpdates" -ForegroundColor Cyan
+Write-Host "[██████████____________________]" -ForegroundColor Cyan
+Write-Host ""
+
 $monitorJob = Start-Job -ScriptBlock {
     function Monitor-SmUpdates {
         while ($true) {
             $smUpdatesProcess = Get-Process -Name "SMUpdates" -ErrorAction SilentlyContinue
             if ($smUpdatesProcess) {
+                Write-Host "SMUpdates process detected. Attempting to stop..." -ForegroundColor Yellow
                 Stop-Process -Name "SMUpdates" -Force -ErrorAction SilentlyContinue
+                Write-Host "SMUpdates process stopped." -ForegroundColor Green
             }
             Start-Sleep -Seconds 2
         }
@@ -123,31 +160,46 @@ $monitorJob = Start-Job -ScriptBlock {
     
     Monitor-SmUpdates
 }
+Write-Host "Monitoring for SMUpdates process in the background..." -ForegroundColor Yellow
 
 # ==================================
 # Part 6 - Manage SO Live Sales Service
-# PartVersion-1.00
-# - Initial version.
-#LOCK=OFF
+# PartVersion-1.01
+# - Initialized $wasRunning variable.
+#LOCK=ON
 # ==================================
+Clear-Host
+Show-Intro
+Write-Host "[Part 6/15] Managing SO Live Sales Service" -ForegroundColor Cyan
+Write-Host "[████████████__________________]" -ForegroundColor Cyan
+Write-Host ""
+
 $ServiceName = "srvSOLiveSales"
+$wasRunning = $false # Initialize the variable
+
 try {
-    if ((Get-Service -Name $ServiceName -ErrorAction Stop).Status -eq 'Running') {
-        Stop-Service -Name $ServiceName -Force -ErrorAction Stop
-        Write-Host "Service '$ServiceName' stopped successfully." -ForegroundColor Green
-    }
-    else{
-        Write-Host "Service '$ServiceName' is not running." -ForegroundColor Yellow
+    $service = Get-Service -Name $ServiceName -ErrorAction SilentlyContinue
+    if ($service) {
+        if ($service.Status -eq 'Running') {
+            $wasRunning = $true
+            Write-Host "Service '$ServiceName' is running. Stopping..." -ForegroundColor Yellow
+            Stop-Service -Name $ServiceName -Force -ErrorAction Stop
+            Write-Host "Service '$ServiceName' stopped successfully." -ForegroundColor Green
+        } else {
+            Write-Host "Service '$ServiceName' is not running." -ForegroundColor Yellow
+        }
+    } else {
+        Write-Host "Service '$ServiceName' not found." -ForegroundColor Yellow
     }
 } catch {
-    Write-Host "Error stopping service '$ServiceName': $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Error managing service '$ServiceName': $($_.Exception.Message)" -ForegroundColor Red
 }
 
 # ==================================
 # Part 7 - Manage PDTWiFi Processes
 # PartVersion-1.02
 # - Total redo
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -184,7 +236,7 @@ if ($pdtWiFi64Process) {
 # Part 8 - Make Sure SO is closed & Wait for Single Instance of Firebird.exe
 # PartVersion-1.00
 # - Initial version.
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -203,6 +255,9 @@ foreach ($process in $processesToCheck) {
             # Wait without spamming the terminal
             Start-Sleep -Seconds 3  # Check every 3 seconds
         }
+        Write-Host "Smart Office is now closed." -ForegroundColor Green
+    } else {
+        Write-Host "Smart Office ($process) is not running." -ForegroundColor Yellow
     }
 }
 
@@ -219,6 +274,7 @@ function WaitForSingleFirebirdInstance {
         Start-Sleep -Seconds 3
         $firebirdProcesses = Get-Process -Name "firebird" -ErrorAction SilentlyContinue
     }
+    Write-Host "Only one instance of 'firebird.exe' is running." -ForegroundColor Green
 }
 WaitForSingleFirebirdInstance
 
@@ -228,7 +284,7 @@ WaitForSingleFirebirdInstance
 # - Improved terminal selection menu with colors and table formatting
 # - Changed logic to prevent script termination on cancel
 # - Script now stops, but does not exit, on cancel.
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -253,7 +309,7 @@ if ($setupExes.Count -eq 0) {
     # Multiple setup files found, present a terminal selection menu
     Write-Host "`nPlease select the setup to run:`n" -ForegroundColor Yellow
     Write-Host ("{0,-5} {1,-30} {2,-20} {3,-10}" -f "No.", "Executable Name", "Date Modified", "Version") -ForegroundColor White
-    Write-Host ("{0,-5} {1,-30} {2,-20} {3,-10}" -f "---", "------------------------------", "------------", "-------") -ForegroundColor Gray
+    Write-Host ("{0,-5} {1,-30} {2,-20} {3,-10}" -f "---", "------------------------------", "--------------------", "-----------") -ForegroundColor Gray
     for ($i = 0; $i -lt $setupExes.Count; $i++) {
         $exe = $setupExes[$i]
         $dateModified = $exe.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
@@ -267,8 +323,11 @@ if ($setupExes.Count -eq 0) {
     $selection = Read-Host "Selection"
     # Check if the user wants to cancel
     if ([string]::IsNullOrWhiteSpace($selection)) {
-        Write-Host "Operation cancelled. Script execution stopped." -ForegroundColor Red
-        return  # Exit the current part, and stop the script.
+        Write-Host "Operation cancelled. Script execution stopped for this part." -ForegroundColor Red
+        # Note: As per the comment in the original script, this 'return' stops the current part
+        # but allows the script to continue to subsequent parts if they are not dependent.
+        # If the intention is to exit the entire script, 'exit' should be used instead.
+        return 
     }
     # Validate the selection
     if ($selection -match '^\d+$' -and $selection -ge 1 -and $selection -le $setupExes.Count) {
@@ -283,6 +342,7 @@ if ($setupExes.Count -eq 0) {
 try {
     Write-Host "Starting executable: $($selectedExe.Name) ..." -ForegroundColor Cyan
     Start-Process -FilePath $selectedExe.FullName -Wait
+    Write-Host "Setup executable finished." -ForegroundColor Green
 } catch {
     Write-Host "Error starting setup executable: $_" -ForegroundColor Red
     exit
@@ -292,7 +352,7 @@ try {
 # Part 10 - Wait for User Confirmation
 # PartVersion-1.00
 # - Initial version.
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -303,6 +363,7 @@ Write-Host ""
 # Stop monitoring SMUpdates process
 Stop-Job -Job $monitorJob
 Remove-Job -Job $monitorJob
+Write-Host "SMUpdates monitoring stopped." -ForegroundColor Green
 Write-Host "Waiting for confirmation Upgrade is Complete..." -ForegroundColor Yellow
 Add-Type -AssemblyName System.Windows.Forms
 [System.Windows.Forms.MessageBox]::Show("Please ensure the upgrade is complete and Smart Office is closed before clicking OK.", "SO Post Upgrade Confirmation", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
@@ -313,13 +374,14 @@ foreach ($process in $processesToCheck) {
         Read-Host
     }
 }
+Write-Host "Smart Office processes confirmed closed." -ForegroundColor Green
 
 # ==================================
 # Part 11 - Set Permissions for SM Folder
 # PartVersion-1.10
 # - Reverted to the original icacls command for setting permissions.
 # - Added a message to the user about potential delays.
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -327,9 +389,10 @@ Write-Host "[Part 11/15] Setting permissions for Stationmaster folder. Please Wa
 Write-Host "[██████████████████████________]" -ForegroundColor Cyan
 Write-Host ""
 
-Write-Host "Please wait, this task may take ~1-30+ minutes to complete depending on PC speed. Do not interrupt."
+Write-Host "Please wait, this task may take ~1-30+ minutes to complete depending on PC speed. Do not interrupt." -ForegroundColor Yellow
 try {
     & icacls "C:\Program Files (x86)\StationMaster" /grant "*S-1-1-0:(OI)(CI)F" /T /C > $null
+    Write-Host "Permissions for StationMaster folder set successfully." -ForegroundColor Green
 } catch {
     Write-Host "Error setting permissions for SM folder: $_" -ForegroundColor Red
 }
@@ -339,7 +402,7 @@ try {
 # Part 12 - Set Permissions for Firebird Folder
 # PartVersion-1.00
 # - Initial version.
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -349,15 +412,19 @@ Write-Host ""
 
 try {
     & icacls "C:\Program Files (x86)\Firebird" /grant "*S-1-1-0:(OI)(CI)F" /T /C > $null
+    Write-Host "Permissions for Firebird folder set successfully." -ForegroundColor Green
 } catch {
-    Write-Host "Error setting permissions for Firebird folder." -ForegroundColor Red
+    Write-Host "Error setting permissions for Firebird folder: $_" -ForegroundColor Red
 }
 
 # ==================================
 # Part 13 - Revert SO Live Sales Service
-# PartVersion-1.03
-# - Added retry logic and improved error handling.
-#LOCK=OFF
+# PartVersion-1.06
+# - Modified to only start the service if it was previously running.
+# - Removed logic for setting service startup type.
+# - Changed maxRetries to 3.
+# - Added instruction for user to manually start live sales if needed.
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -368,11 +435,11 @@ Write-Host ""
 if ($wasRunning) {
     Write-Host "Service '$ServiceName' was running before. Ensuring it restarts..." -ForegroundColor Yellow
     try {
-        Write-Host "Setting '$ServiceName' service back to Automatic startup..." -ForegroundColor Yellow
-        Set-Service -Name $ServiceName -StartupType Automatic
+        # Removed: Set-Service -Name $ServiceName -StartupType Automatic
+        # As per new requirement, we are only starting the service if it was running.
 
         $retryCount = 0
-        $maxRetries = 5
+        $maxRetries = 3 # Changed from 5 to 3
         $retryIntervalSeconds = 5
 
         while ($retryCount -lt $maxRetries) {
@@ -395,17 +462,17 @@ if ($wasRunning) {
             Write-Host "The script will wait until the service is running..." -ForegroundColor Yellow
 
             while ((Get-Service -Name $ServiceName).Status -ne "Running") {
-                Write-Host "Waiting for '$ServiceName' service to be running. Checking again in 3 seconds..." -ForegroundColor Yellow
+                Write-Host "Waiting for '$ServiceName' service to be running. Please manually start the service. Checking again in 3 seconds..." -ForegroundColor Yellow
                 Start-Sleep -Seconds 3
             }
             Write-Host "Service '$ServiceName' is now running. Continuing..." -ForegroundColor Green
 
         } else {
-            Write-Host "'$ServiceName' service reverted to Automatic and confirmed to be running." -ForegroundColor Green
+            Write-Host "'$ServiceName' service confirmed to be running." -ForegroundColor Green
         }
 
     } catch {
-        Write-Host "Error encountered while reverting/starting service '$ServiceName': $_" -ForegroundColor Red
+        Write-Host "Error encountered while starting service '$ServiceName': $($_.Exception.Message)" -ForegroundColor Red
     }
 } else {
     Write-Host "Service '$ServiceName' was not running before, so no action needed." -ForegroundColor Yellow
@@ -415,7 +482,7 @@ if ($wasRunning) {
 # Part 14 - Revert PDTWiFi Processes
 # PartVersion 1.02
 # - Total re-do
-#LOCK=OFF
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -425,15 +492,23 @@ Write-Host ""
 
 # Section A - Recall and Revert PDTWiFi
 if ($PDTWiFiStates[$PDTWiFi] -eq "Running") {
-    Start-Process "C:\Program Files (x86)\StationMaster\PDTWiFi.exe"
-    Write-Host "$PDTWiFi started." -ForegroundColor Green
+    try {
+        Start-Process "C:\Program Files (x86)\StationMaster\PDTWiFi.exe" -ErrorAction Stop
+        Write-Host "$PDTWiFi started." -ForegroundColor Green
+    } catch {
+        Write-Host "Error starting $PDTWiFi: $($_.Exception.Message)" -ForegroundColor Red
+    }
 } else {
     Write-Host "$PDTWiFi was not running, no action taken." -ForegroundColor Yellow
 }
 # Section B - Recall and Revert PDTWiFi64
 if ($PDTWiFiStates[$PDTWiFi64] -eq "Running") {
-    Start-Process "C:\Program Files (x86)\StationMaster\PDTWiFi64.exe"
-    Write-Host "$PDTWiFi64 started." -ForegroundColor Green
+    try {
+        Start-Process "C:\Program Files (x86)\StationMaster\PDTWiFi64.exe" -ErrorAction Stop
+        Write-Host "$PDTWiFi64 started." -ForegroundColor Green
+    } catch {
+        Write-Host "Error starting $PDTWiFi64: $($_.Exception.Message)" -ForegroundColor Red
+    }
 } else {
     Write-Host "$PDTWiFi64 was not running, no action taken." -ForegroundColor Yellow
 }
@@ -443,7 +518,8 @@ if ($PDTWiFiStates[$PDTWiFi64] -eq "Running") {
 # PartVersion-1.07
 # - Fixed the script duration calculation to correctly capture start time.
 # - Improved comments and formatting.
-#LOCK=OFF
+# - Uncommented feedback message for scheduled task check.
+#LOCK=ON
 # ==================================
 Clear-Host
 Show-Intro
@@ -471,6 +547,8 @@ Write-Host ("{0,-25} {1,-15}" -f "-------------------------", "---------------")
 function Get-StatusColor ($status) {
     if ($status -eq "Running") {
         return "Green"
+    } elseif ($status -eq "Not Installed") {
+        return "Gray" # Use gray for "Not Installed" to distinguish from "Stopped"
     } else {
         return "Yellow"
     }
@@ -482,12 +560,18 @@ Write-Host ("{0,-25} {1,-15}" -f "PDTWiFi64.exe", $pdtWifi64Status) -ForegroundC
 
 Write-Host "------------------------------------------------" -ForegroundColor Yellow
 
-# Run SO_UC.exe if it's Task doesn't exist.
+# Run SO_UC.exe if its Task doesn't exist.
 $taskExists = Get-ScheduledTask -TaskName "SO InstallerUpdates" -ErrorAction SilentlyContinue
 if (-not $taskExists) {
-    Start-Process -FilePath "C:\winsm\SO_UC.exe" -Wait
+    Write-Host "Scheduled Task 'SO InstallerUpdates' does not exist. Running SO_UC.exe..." -ForegroundColor Yellow
+    try {
+        Start-Process -FilePath "C:\winsm\SO_UC.exe" -Wait -ErrorAction Stop
+        Write-Host "SO_UC.exe executed successfully." -ForegroundColor Green
+    } catch {
+        Write-Host "Error executing SO_UC.exe: $($_.Exception.Message)" -ForegroundColor Red
+    }
 } else {
-    #Write-Output "Scheduled Task 'SO InstallerUpdates' already exists. Skipping execution."
+    Write-Host "Scheduled Task 'SO InstallerUpdates' already exists. Skipping SO_UC.exe execution." -ForegroundColor Yellow
 }
 
 # Calculate and display script execution time
@@ -504,11 +588,17 @@ Write-Host " "
 Write-Host "Press Enter to start Smart Office, '9' to reboot now, or any other key to exit."
 $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
 
-if ($key.VirtualKeyCode -eq 13) {
-    Start-Process "C:\Program Files (x86)\StationMaster\Sm32.exe"
+if ($key.VirtualKeyCode -eq 13) { # Enter key
+    Write-Host "Starting Smart Office..." -ForegroundColor Cyan
+    try {
+        Start-Process "C:\Program Files (x86)\StationMaster\Sm32.exe" -ErrorAction Stop
+        Write-Host "Smart Office started successfully." -ForegroundColor Green
+    } catch {
+        Write-Host "Error starting Smart Office: $($_.Exception.Message)" -ForegroundColor Red
+    }
 } elseif ($key.VirtualKeyCode -eq 57) { # 57 is the VirtualKeyCode for '9'
-    Write-Host "Rebooting..."
+    Write-Host "Rebooting..." -ForegroundColor Cyan
     Restart-Computer -Force
 } else {
-    Write-Host "Exiting..."
+    Write-Host "Exiting..." -ForegroundColor Cyan
 }
