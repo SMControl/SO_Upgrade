@@ -1,4 +1,4 @@
-Write-Host "SOUpgradeAssistant.ps1 - Version 1.209"
+Write-Host "SOUpgradeAssistant.ps1 - Version 1.210"
 # This script automates the upgrade process for Smart Office (SO) software.
 #
 # Recent Changes:
@@ -32,7 +32,7 @@ if (-not (Test-Path $workingDir -PathType Container)) {
     try {
         New-Item -Path $workingDir -ItemType Directory -ErrorAction Stop | Out-Null
     } catch {
-        Write-Host "Error: Unable to create directory $workingDir" -ForegroundColor Red
+        Write-Host "Error= Unable to create directory $workingDir" -ForegroundColor Red
         exit
     }
 }
@@ -58,7 +58,7 @@ function Test-Admin {
 
 # Check if the script is running with administrator rights
 if (-not (Test-Admin)) {
-    Write-Host "Error: Administrator rights required to run this script. Exiting." -ForegroundColor Red
+    Write-Host "Error= Administrator rights required to run this script. Exiting." -ForegroundColor Red
     pause
     exit
 }
@@ -72,7 +72,7 @@ if (-Not (Test-Path $soucExeDestinationPath)) {
         Invoke-WebRequest -Uri $soucExeUrl -OutFile $soucExeDestinationPath -ErrorAction Stop
         Write-Host "SO_UC.exe downloaded successfully to $soucExeDestinationPath." -ForegroundColor Green
     } catch {
-        Write-Host "Error downloading SO_UC.exe: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Error downloading SO_UC.exe $($_.Exception.Message)" -ForegroundColor Red
         exit
     }
 } else {
@@ -99,7 +99,7 @@ try {
     Invoke-Expression (Invoke-RestMethod -Uri $sogetScriptURL -ErrorAction Stop)
     Write-Host "module_soget.ps1 executed successfully." -ForegroundColor Green
 } catch {
-    Write-Host "Error executing module_soget.ps1: $($_.Exception.Message)" -ForegroundColor Red
+    Write-Host "Error executing module_soget.ps1 $($_.Exception.Message)" -ForegroundColor Red
     exit
 }
 
@@ -264,13 +264,13 @@ foreach ($process in $processesToCheck) {
 # Wait for single firebird instance
 $setupDir = "$workingDir\SmartOffice_Installer"
 if (-not (Test-Path $setupDir -PathType Container)) {
-    Write-Host "Error: Setup directory '$setupDir' does not exist." -ForegroundColor Red
+    Write-Host "Error Setup directory '$setupDir' does not exist." -ForegroundColor Red
     exit
 }
 function WaitForSingleFirebirdInstance {
     $firebirdProcesses = Get-Process -Name "firebird" -ErrorAction SilentlyContinue
     while ($firebirdProcesses.Count -gt 1) {
-        Write-Host "`rWarning: Multiple instances of 'firebird.exe' are running. Currently: $($firebirdProcesses.Count) " -ForegroundColor Yellow -NoNewline
+        Write-Host "`rWarning= Multiple instances of 'firebird.exe' are running. Currently: $($firebirdProcesses.Count) " -ForegroundColor Yellow -NoNewline
         Start-Sleep -Seconds 3
         $firebirdProcesses = Get-Process -Name "firebird" -ErrorAction SilentlyContinue
     }
@@ -295,19 +295,19 @@ Write-Host ""
 # Get all setup executables in the SmartOffice_Installer directory
 $setupExes = Get-ChildItem -Path "C:\winsm\SmartOffice_Installer" -Filter "*.exe"
 if ($setupExes.Count -eq 0) {
-    Write-Host "Error: No executable (.exe) found in 'C:\winsm\SmartOffice_Installer'." -ForegroundColor Red
+    Write-Host "Error No executable (.exe) found in 'C:\winsm\SmartOffice_Installer'." -ForegroundColor Red
     exit
 } elseif ($setupExes.Count -eq 1) {
     # Only one file found, proceed without asking the user
     $selectedExe = $setupExes[0]
-    Write-Host "Found setup: $($selectedExe.Name)" -ForegroundColor Green
+    Write-Host "Found setup $($selectedExe.Name)" -ForegroundColor Green
 } else {
     # Sort executables by version (numeric part in the name) ascending
     $setupExes = $setupExes | Sort-Object {
         [regex]::Match($_.Name, "Setup(\d+)\.exe").Groups[1].Value -as [int]
     }
     # Multiple setup files found, present a terminal selection menu
-    Write-Host "`nPlease select the setup to run:`n" -ForegroundColor Yellow
+    Write-Host "`nPlease select the setup to run`n" -ForegroundColor Yellow
     Write-Host ("{0,-5} {1,-30} {2,-20} {3,-10}" -f "No.", "Executable Name", "Date Modified", "Version") -ForegroundColor White
     Write-Host ("{0,-5} {1,-30} {2,-20} {3,-10}" -f "---", "------------------------------", "--------------------", "-----------") -ForegroundColor Gray
     for ($i = 0; $i -lt $setupExes.Count; $i++) {
@@ -332,7 +332,7 @@ if ($setupExes.Count -eq 0) {
     # Validate the selection
     if ($selection -match '^\d+$' -and $selection -ge 1 -and $selection -le $setupExes.Count) {
         $selectedExe = $setupExes[$selection - 1]  # Convert to 0-based index
-        Write-Host "Selected setup executable: $($selectedExe.Name)" -ForegroundColor Green
+        Write-Host "Selected setup executable $($selectedExe.Name)" -ForegroundColor Green
     } else {
         Write-Host "Invalid selection. Exiting." -ForegroundColor Red
         exit # Exits the entire script
@@ -344,7 +344,7 @@ try {
     Start-Process -FilePath $selectedExe.FullName -Wait
     Write-Host "Setup executable finished." -ForegroundColor Green
 } catch {
-    Write-Host "Error starting setup executable: $_" -ForegroundColor Red
+    Write-Host "Error starting setup executable $_" -ForegroundColor Red
     exit
 }
 
@@ -472,7 +472,7 @@ if ($wasRunning) {
         }
 
     } catch {
-        Write-Host "Error encountered while starting service '$ServiceName': $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Error encountered while starting service '$ServiceName' $($_.Exception.Message)" -ForegroundColor Red
     }
 } else {
     Write-Host "Service '$ServiceName' was not running before, so no action needed." -ForegroundColor Yellow
@@ -496,7 +496,7 @@ if ($PDTWiFiStates[$PDTWiFi] -eq "Running") {
         Start-Process "C:\Program Files (x86)\StationMaster\PDTWiFi.exe" -ErrorAction Stop
         Write-Host "$PDTWiFi started." -ForegroundColor Green
     } catch {
-        Write-Host "Error starting $PDTWiFi: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Error starting $PDTWiFi $($_.Exception.Message)" -ForegroundColor Red
     }
 } else {
     Write-Host "$PDTWiFi was not running, no action taken." -ForegroundColor Yellow
@@ -507,7 +507,7 @@ if ($PDTWiFiStates[$PDTWiFi64] -eq "Running") {
         Start-Process "C:\Program Files (x86)\StationMaster\PDTWiFi64.exe" -ErrorAction Stop
         Write-Host "$PDTWiFi64 started." -ForegroundColor Green
     } catch {
-        Write-Host "Error starting $PDTWiFi64: $($_.Exception.Message)" -ForegroundColor Red
+        Write-Host "Error starting $PDTWiFi64 $($_.Exception.Message)" -ForegroundColor Red
     }
 } else {
     Write-Host "$PDTWiFi64 was not running, no action taken." -ForegroundColor Yellow
