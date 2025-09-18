@@ -1,4 +1,4 @@
-Write-Host "SOUpgradeAssistant.ps1 - Version 1.210" # previous working to this was 1.203
+Write-Host "SOUpgradeAssistant.ps1 - Version 1.211" # previous working to this was 1.203
 # This script automates the upgrade process for Smart Office (SO) software.
 #
 # Recent Changes:
@@ -63,21 +63,22 @@ if (-not (Test-Admin)) {
     exit
 }
 
+#outdated-so disabled
 # Download the SO_UC.exe and save it to C:\winsm
-$soucExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SO_UC.exe?raw=true"
-$soucExeDestinationPath = "C:\winsm\SO_UC.exe"
-if (-Not (Test-Path $soucExeDestinationPath)) {
-    Write-Host "Downloading SO_UC.exe..." -ForegroundColor Yellow
-    try {
-        Invoke-WebRequest -Uri $soucExeUrl -OutFile $soucExeDestinationPath -ErrorAction Stop
-        Write-Host "SO_UC.exe downloaded successfully to $soucExeDestinationPath." -ForegroundColor Green
-    } catch {
-        Write-Host "Error downloading SO_UC.exe $($_.Exception.Message)" -ForegroundColor Red
-        exit
-    }
-} else {
-    Write-Host "SO_UC.exe already exists at $soucExeDestinationPath. Skipping download." -ForegroundColor Yellow
-}
+#$soucExeUrl = "https://github.com/SMControl/SO_UC/blob/main/SO_UC.exe?raw=true"
+#$soucExeDestinationPath = "C:\winsm\SO_UC.exe"
+#if (-Not (Test-Path $soucExeDestinationPath)) {
+#    Write-Host "Downloading SO_UC.exe..." -ForegroundColor Yellow
+#    try {
+#        Invoke-WebRequest -Uri $soucExeUrl -OutFile $soucExeDestinationPath -ErrorAction Stop
+#        Write-Host "SO_UC.exe downloaded successfully to $soucExeDestinationPath." -ForegroundColor Green
+#    } catch {
+#        Write-Host "Error downloading SO_UC.exe $($_.Exception.Message)" -ForegroundColor Red
+#        exit
+#    }
+#} else {
+#    Write-Host "SO_UC.exe already exists at $soucExeDestinationPath. Skipping download." -ForegroundColor Yellow
+#}
 
 # ==================================
 # Part 3 - SO_UC.exe // calling module_soget
@@ -560,19 +561,20 @@ Write-Host ("{0,-25} {1,-15}" -f "PDTWiFi64.exe", $pdtWifi64Status) -ForegroundC
 
 Write-Host "------------------------------------------------" -ForegroundColor Yellow
 
+# outdated so disabled
 # Run SO_UC.exe if its Task doesn't exist.
-$taskExists = Get-ScheduledTask -TaskName "SO InstallerUpdates" -ErrorAction SilentlyContinue
-if (-not $taskExists) {
-    Write-Host "Scheduled Task 'SO InstallerUpdates' does not exist. Running SO_UC.exe..." -ForegroundColor Yellow
-    try {
-        Start-Process -FilePath "C:\winsm\SO_UC.exe" -Wait -ErrorAction Stop
-        Write-Host "SO_UC.exe executed successfully." -ForegroundColor Green
-    } catch {
-        Write-Host "Error executing SO_UC.exe: $($_.Exception.Message)" -ForegroundColor Red
-    }
-} else {
-    Write-Host "Scheduled Task 'SO InstallerUpdates' already exists. Skipping SO_UC.exe execution." -ForegroundColor Yellow
-}
+#$taskExists = Get-ScheduledTask -TaskName "SO InstallerUpdates" -ErrorAction SilentlyContinue
+#if (-not $taskExists) {
+#    Write-Host "Scheduled Task 'SO InstallerUpdates' does not exist. Running SO_UC.exe..." -ForegroundColor Yellow
+#    try {
+#        Start-Process -FilePath "C:\winsm\SO_UC.exe" -Wait -ErrorAction Stop
+#        Write-Host "SO_UC.exe executed successfully." -ForegroundColor Green
+#    } catch {
+#        Write-Host "Error executing SO_UC.exe: $($_.Exception.Message)" -ForegroundColor Red
+#    }
+#} else {
+#    Write-Host "Scheduled Task 'SO InstallerUpdates' already exists. Skipping SO_UC.exe execution." -ForegroundColor Yellow
+#}
 
 # Calculate and display script execution time
 $endTime = Get-Date
