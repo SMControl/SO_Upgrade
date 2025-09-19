@@ -1,20 +1,5 @@
 Write-Host "SOUpgradeAssistant.ps1 - Version 1.211" # previous working to this was 1.203
 # This script automates the upgrade process for Smart Office (SO) software.
-#
-# Recent Changes:
-# - Updated script to version 1.209.
-# - Incorporated the latest Part 6 (stopping service) and Part 13 (starting service).
-# - Set LOCK=ON for all parts.
-# - Fixed the script duration calculation.
-# - Improved comments and formatting.
-# - Added a message to the user about potential delays in Part 11.
-# - Added SO_UC.exe download
-# - Changed SO_UC execution
-# - Added check for SO_UC scheduled task and execute if not exists
-# - Added logic to handle SO Live Sales service startup more robustly.
-# - Changed Part 9 to prevent window closure on cancel.
-# - Initialized $wasRunning variable for Part 6.
-# - Uncommented feedback message in Part 15 for scheduled task check.
 
 # Initialize script start time
 $startTime = Get-Date
@@ -62,6 +47,9 @@ if (-not (Test-Admin)) {
     pause
     exit
 }
+
+# Make sure SO Setup Get is installed.
+irm https://raw.githubusercontent.com/SMControl/SM_Tasks/refs/heads/main/tasks/task_SO%20Setup%20Get.ps1 | iex
 
 #outdated-so disabled
 # Download the SO_UC.exe and save it to C:\winsm
