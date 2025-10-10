@@ -2,17 +2,17 @@
 # ==================================
 # Part 1 - Check if scheduled task exists and create if it doesn't
 # ==================================
-Write-Host "Checking Scheduled Task"
-$taskExists = Get-ScheduledTask -TaskName "SO InstallerUpdates" -ErrorAction SilentlyContinue
-if (-not $taskExists) {
-    Write-Host "Adding Scheduled Task"
-    $action = New-ScheduledTaskAction -Execute "C:\winsm\SO_UC.exe"
-    $randomHour = Get-Random -Minimum 0 -Maximum 5
-    $randomMinute = Get-Random -Minimum 0 -Maximum 59
-    $trigger = New-ScheduledTaskTrigger -Daily -At "${randomHour}:${randomMinute}"
-    $settings = New-ScheduledTaskSettingsSet -Hidden:$true
-    Register-ScheduledTask -TaskName "SO InstallerUpdates" -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest
-}
+#Write-Host "Checking Scheduled Task"
+#$taskExists = Get-ScheduledTask -TaskName "SO InstallerUpdates" -ErrorAction SilentlyContinue
+#if (-not $taskExists) {
+#    Write-Host "Adding Scheduled Task"
+#    $action = New-ScheduledTaskAction -Execute "C:\winsm\SO_UC.exe"
+#    $randomHour = Get-Random -Minimum 0 -Maximum 5
+#    $randomMinute = Get-Random -Minimum 0 -Maximum 59
+#    $trigger = New-ScheduledTaskTrigger -Daily -At "${randomHour}:${randomMinute}"
+#    $settings = New-ScheduledTaskSettingsSet -Hidden:$true
+#    Register-ScheduledTask -TaskName "SO InstallerUpdates" -Action $action -Trigger $trigger -Settings $settings -RunLevel Highest
+#}
 # ==================================
 # Part 2 - Retrieve .exe links from the webpage
 # ==================================
