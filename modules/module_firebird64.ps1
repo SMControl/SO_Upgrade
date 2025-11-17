@@ -1,10 +1,10 @@
-# Script Version: 1.0.7
+# Script Version: 1.0.8
 # Module Name: Firebird 64-bit Installer
 # Description: Installs the Firebird SQL Server (64-bit).
 # ----------------------------------------------------------------------------------
 
 # Output the script name and version
-Write-Host "Running module_firebird64.ps1 - Version 1.0.7"
+Write-Host "Running module_firebird64.ps1 - Version 1.0.8"
 
 $installerUrl = "https://firebirdsql.org/download-file?file=https://github.com/FirebirdSQL/firebird/releases/download/v4.0.6/Firebird-4.0.6.3221-0-x64-pdb.exe"
 
@@ -16,7 +16,7 @@ TempCacheLimit = 8000M
 LockHashSlots = 65519
 LockMemSize = 30M
 InlineSortThreshold = 16384
-MaxParallelWorkers = 0
+MaxParallelWorkers = 15
 "@
 
 write-host "Checking if Firebird is Installed"
@@ -24,8 +24,34 @@ if (!(Test-Path "C:\Program Files\Firebird")) {
     # Updated installer filename to reflect the 4.0.6 64-bit version
     $installerPath = "$env:TEMP\Firebird-4.0.6-x64.exe"
     write-host "Firebird is not installed" -ForegroundColor Red
-    write-host "Obtaining Installer"
-    Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
+    
+    # --- Start Download Logic with Retry ---
+    write-host "Obtaining Installer (Max 3 attempts)..."
+    $maxRetries = 3
+    $downloadSuccessful = $false
+
+    for ($i = 1; $i -le $maxRetries; $i++) {
+        try {
+            if ($i -gt 1) {
+                Write-Host "Download failed. Retrying in 5 seconds (Attempt $i/$maxRetries)..." -ForegroundColor Yellow
+                Start-Sleep -Seconds 5
+            }
+            # Use -ErrorAction Stop to ensure failure is caught by the try block
+            Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath -ErrorAction Stop
+            $downloadSuccessful = $true
+            Write-Host "Download successful." -ForegroundColor Green
+            break
+        } catch {
+            Write-Host "Error during download attempt $i: $($_.Exception.Message)" -ForegroundColor Red
+        }
+    }
+
+    if (-not $downloadSuccessful) {
+        Write-Host "Installation aborted due to critical download failure after $maxRetries attempts." -ForegroundColor Red
+        exit 1
+    }
+    # --- End Download Logic with Retry ---
+    
     write-host "Installing Firebird"
     Start-Process -FilePath $installerPath -ArgumentList "/LANG=en", "/NORESTART", "/VERYSILENT", "/MERGETASKS=UseClassicServerTask,UseServiceTask,CopyFbClientAsGds32Task" -Wait
     
