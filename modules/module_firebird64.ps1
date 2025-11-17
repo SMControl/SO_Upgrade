@@ -1,10 +1,10 @@
-# Script Version: 1.0.9
+# Script Version: 1.1.0
 # Module Name: Firebird 64-bit Installer
 # Description: Installs the Firebird SQL Server (64-bit).
 # ----------------------------------------------------------------------------------
 
 # Output the script name and version
-Write-Host "Running module_firebird64.ps1 - Version 1.0.9"
+Write-Host "Running module_firebird64.ps1 - Version 1.1.0"
 
 $installerUrl = "https://firebirdsql.org/download-file?file=https://github.com/FirebirdSQL/firebird/releases/download/v4.0.6/Firebird-4.0.6.3221-0-x64.exe"
 
@@ -33,7 +33,8 @@ if (!(Test-Path "C:\Program Files\Firebird")) {
     for ($i = 1; $i -le $maxRetries; $i++) {
         try {
             if ($i -gt 1) {
-                Write-Host "Download failed. Retrying in 5 seconds (Attempt $i/$maxRetries)..." -ForegroundColor Yellow
+                # Fix: Use ${i} and ${maxRetries} to prevent parsing error
+                Write-Host "Download failed. Retrying in 5 seconds (Attempt ${i}/${maxRetries})..." -ForegroundColor Yellow
                 Start-Sleep -Seconds 5
             }
             # Use -ErrorAction Stop to ensure failure is caught by the try block
@@ -42,12 +43,14 @@ if (!(Test-Path "C:\Program Files\Firebird")) {
             Write-Host "Download successful." -ForegroundColor Green
             break
         } catch {
-            Write-Host "Error during download attempt $i: $($_.Exception.Message)" -ForegroundColor Red
+            # Fix: Use ${i} to prevent parsing error near the colon
+            Write-Host "Error during download attempt ${i}: $($_.Exception.Message)" -ForegroundColor Red
         }
     }
 
     if (-not $downloadSuccessful) {
-        Write-Host "Installation aborted due to critical download failure after $maxRetries attempts." -ForegroundColor Red
+        # Fix: Use ${maxRetries}
+        Write-Host "Installation aborted due to critical download failure after ${maxRetries} attempts." -ForegroundColor Red
         exit 1
     }
     # --- End Download Logic with Retry ---
