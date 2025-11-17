@@ -1,12 +1,12 @@
-# Script Version: 1.0.8
+# Script Version: 1.0.9
 # Module Name: Firebird 64-bit Installer
 # Description: Installs the Firebird SQL Server (64-bit).
 # ----------------------------------------------------------------------------------
 
 # Output the script name and version
-Write-Host "Running module_firebird64.ps1 - Version 1.0.8"
+Write-Host "Running module_firebird64.ps1 - Version 1.0.9"
 
-$installerUrl = "https://firebirdsql.org/download-file?file=https://github.com/FirebirdSQL/firebird/releases/download/v4.0.6/Firebird-4.0.6.3221-0-x64-pdb.exe"
+$installerUrl = "https://firebirdsql.org/download-file?file=https://github.com/FirebirdSQL/firebird/releases/download/v4.0.6/Firebird-4.0.6.3221-0-x64.exe"
 
 # Configuration content declared as a variable for easy adjustment
 $firebirdConfigContent = @"
