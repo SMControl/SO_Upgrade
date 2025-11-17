@@ -16,7 +16,7 @@ TempCacheLimit = 8000M
 LockHashSlots = 65519
 LockMemSize = 30M
 InlineSortThreshold = 16384
-MaxParallelWorkers = 15
+MaxParallelWorkers = 3
 "@
 
 write-host "Checking if Firebird is Installed"
