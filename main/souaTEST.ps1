@@ -1,6 +1,26 @@
-Write-Host "SOUpgradeAssistant.ps1 - Version 1.210"
+Write-Host "SOUpgradeAssistant.ps1 - Version 1.211"
+# This script automates the upgrade process for Smart Office (SO) software.
+#
+# Recent Changes:
+# - Updated script to version 1.209.
+# - Incorporated the latest Part 6 (stopping service) and Part 13 (starting service).
+# - Set LOCK=ON for all parts.
+# - Fixed the script duration calculation.
+# - Improved comments and formatting.
+# - Added a message to the user about potential delays in Part 11.
+# - Added SO_UC.exe download
+# - Changed SO_UC execution
+# - Added check for SO_UC scheduled task and execute if not exists
+# - Added logic to handle SO Live Sales service startup more robustly.
+# - Changed Part 9 to prevent window closure on cancel.
+# - Initialized $wasRunning variable for Part 6.
+# - Uncommented feedback message in Part 15 for scheduled task check.
+
 # Initialize script start time
 $startTime = Get-Date
+
+
+
 # Set the working directory
 $Global:Config = @{
     WorkingDir = "C:\winsm"
@@ -34,7 +54,7 @@ $workingDir = $Global:Config.WorkingDir
 # Logging Function
 function Write-Log {
     param(
-        [Parameter(Mandatory = $true)][string]$Message,
+        [Parameter(Mandatory = $false)][string]$Message = "",
         [string]$ForegroundColor = "White",
         [switch]$NoNewline
     )
@@ -62,7 +82,7 @@ function Write-Log {
 
 # Function to display the script's introduction
 function Show-Intro {
-    Write-Log "SO Upgrade Assistant - Version 1.209" -ForegroundColor Green
+    Write-Log "SO Upgrade Assistant - Version 1.211" -ForegroundColor Green
     Write-Log "--------------------------------------------------------------------------------"
     Write-Log ""
 }
