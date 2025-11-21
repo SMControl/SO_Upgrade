@@ -1,16 +1,21 @@
-# module_firebird.ps1
+#Write-Host "Running module_firebird_sm_default.ps1"
+
 $installerUrl = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/bin/Firebird-4.0.1.exe"
-write-host "Checking if Firebird is Installed"
+
+$firebirdConfigContent = @"
+# Essential
+DataTypeCompatibility = 3.0
+"@
+
 if (!(Test-Path "C:\Program Files (x86)\Firebird")) { 
     $installerPath = "$env:TEMP\Firebird-4.0.1.exe"
     write-host "Firebird is not installed" -ForegroundColor Red
-    write-host "Obtaining Installer"
     Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
-    write-host "Installing Firebird"
+    write-host "Installing Firebird 32bit V4.0.1 with DataTypeCompatibility = 3.0"
     Start-Process -FilePath $installerPath -ArgumentList "/LANG=en", "/NORESTART", "/VERYSILENT", "/MERGETASKS=UseClassicServerTask,UseServiceTask,CopyFbClientAsGds32Task" -Wait
     write-host "Editing firebird.conf"
-    (Get-Content "C:\Program Files (x86)\Firebird\Firebird_4_0\firebird.conf") -replace '#DataTypeCompatibility.*', 'DataTypeCompatibility = 3.0' | Set-Content "C:\Program Files (x86)\Firebird\Firebird_4_0\firebird.conf"
+    $configPath = "C:\Program Files (x86)\Firebird\Firebird_4_0\firebird.conf"
+    Set-Content $configPath -Value $firebirdConfigContent -Force
     write-host "Starting Firebird Service"
     Start-Service -Name "FirebirdServerDefaultInstance"
 }
-
