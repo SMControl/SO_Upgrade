@@ -1,13 +1,21 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_REBOOT.ps1
-# Version: 2.110
+# Version: 2.140
 # Description: Automates the upgrade process for Smart Office (SO) software with reboot-resume capability.
 # ==================================================================================================
 # Recent Changes:
+# - Version 2.140: TRIGGER CHANGE TO ONLOGON
+#   - Changed scheduled task trigger from ONSTART to ONLOGON
+#   - More reliable - triggers when user logs in, not at system startup
+#   - Uses domain\username for the logon trigger
+# - Version 2.130: RUN DIRECTLY FROM GITHUB
+#   - Scheduled task now runs script directly from GitHub (no local file)
+#   - Uses Invoke-Expression with ScriptBlock to pass -Resume parameter
+#   - Simpler, always uses latest version, no file management needed
+# - Version 2.120: (deprecated approach)
 # - Version 2.110: SCHEDULED TASK SIMPLIFICATION
 #   - Replaced PowerShell cmdlets with schtasks.exe one-liner for better compatibility
 #   - Added /RU parameter with domain\username for reliability across different PCs
-#   - Simplified task creation (no more complex principal/settings objects)
 # - Version 2.100: REBOOT-RESUME FIXES
 #   - Simplified reboot logic: reboot only happens at Part 8
 #   - Removed exit code checking (assume reboot might happen regardless)
@@ -34,7 +42,7 @@ $startTime = Get-Date
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion  = "2.110"
+    ScriptVersion  = "2.140"
     WorkingDir     = "C:\winsm"
     LogDir         = "C:\winsm\SmartOffice_Installer\soua_logs"
     StateFile      = "C:\winsm\soua_state.json"
@@ -227,17 +235,21 @@ function Register-ResumeTask {
         Creates a scheduled task to resume the script after reboot.
     #>
     try {
-        $scriptPath = $PSCommandPath
+        $scriptUrl = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/souaTEST_REBOOT.ps1"
         
         Write-Log "Creating scheduled task..." -ForegroundColor Yellow
-        Write-Log "  Script: $scriptPath" -ForegroundColor Gray
+        Write-Log "  Script URL: $scriptUrl" -ForegroundColor Gray
         Write-Log "  Task Name: $($Global:Config.ResumeTaskName)" -ForegroundColor Gray
         
-        # Use schtasks.exe for maximum compatibility (one-liner approach)
-        $taskCmd = "PowerShell.exe -ExecutionPolicy Bypass -WindowStyle Normal -File `"$scriptPath`" -Resume"
+        # Create a command that downloads and runs the script with -Resume parameter
+        # We use a wrapper command because the script only exists online
+        $downloadAndRun = "Invoke-Expression `"& ([ScriptBlock]::Create((Invoke-RestMethod -Uri '$scriptUrl'))) -Resume`""
+        $taskCmd = "PowerShell.exe -ExecutionPolicy Bypass -WindowStyle Normal -Command `"$downloadAndRun`""
         $currentUser = "$env:USERDOMAIN\$env:USERNAME"
+        Write-Log "  Task will download and run script from GitHub with -Resume parameter" -ForegroundColor Gray
+        Write-Log "  Trigger: On user logon ($currentUser)" -ForegroundColor Gray
         
-        $result = & schtasks /Create /TN $Global:Config.ResumeTaskName /TR $taskCmd /SC ONSTART /RU $currentUser /RL HIGHEST /F 2>&1
+        $result = & schtasks /Create /TN $Global:Config.ResumeTaskName /TR $taskCmd /SC ONLOGON /RU $currentUser /RL HIGHEST /F 2>&1
         
         if ($LASTEXITCODE -eq 0) {
             Write-Log "  Running as: $currentUser" -ForegroundColor Gray
