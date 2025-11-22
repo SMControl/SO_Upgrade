@@ -1,13 +1,16 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_REBOOT.ps1
-# Version: 2.140
+# Version: 2.150
 # Description: Automates the upgrade process for Smart Office (SO) software with reboot-resume capability.
 # ==================================================================================================
 # Recent Changes:
+# - Version 2.150: DOWNLOAD TO LOCAL FILE
+#   - Changed back to downloading script to C:\winsm\souaTEST_REBOOT.ps1
+#   - More reliable for scheduled tasks than ScriptBlock approach
+#   - Uses -File parameter instead of -Command
 # - Version 2.140: TRIGGER CHANGE TO ONLOGON
 #   - Changed scheduled task trigger from ONSTART to ONLOGON
 #   - More reliable - triggers when user logs in, not at system startup
-#   - Uses domain\username for the logon trigger
 # - Version 2.130: RUN DIRECTLY FROM GITHUB
 #   - Scheduled task now runs script directly from GitHub (no local file)
 #   - Uses Invoke-Expression with ScriptBlock to pass -Resume parameter
@@ -42,7 +45,7 @@ $startTime = Get-Date
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion  = "2.140"
+    ScriptVersion  = "2.150"
     WorkingDir     = "C:\winsm"
     LogDir         = "C:\winsm\SmartOffice_Installer\soua_logs"
     StateFile      = "C:\winsm\soua_state.json"
@@ -236,17 +239,28 @@ function Register-ResumeTask {
     #>
     try {
         $scriptUrl = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/main/souaTEST_REBOOT.ps1"
+        $localScriptPath = "C:\winsm\souaTEST_REBOOT.ps1"
         
         Write-Log "Creating scheduled task..." -ForegroundColor Yellow
         Write-Log "  Script URL: $scriptUrl" -ForegroundColor Gray
+        Write-Log "  Local Path: $localScriptPath" -ForegroundColor Gray
         Write-Log "  Task Name: $($Global:Config.ResumeTaskName)" -ForegroundColor Gray
         
-        # Create a command that downloads and runs the script with -Resume parameter
-        # We use a wrapper command because the script only exists online
-        $downloadAndRun = "Invoke-Expression `"& ([ScriptBlock]::Create((Invoke-RestMethod -Uri '$scriptUrl'))) -Resume`""
-        $taskCmd = "PowerShell.exe -ExecutionPolicy Bypass -WindowStyle Normal -Command `"$downloadAndRun`""
+        # Download the script to local path
+        try {
+            Write-Log "  Downloading script..." -ForegroundColor Gray
+            Invoke-RestMethod -Uri $scriptUrl -OutFile $localScriptPath -ErrorAction Stop
+            Write-Log "  Script downloaded successfully." -ForegroundColor Green
+        }
+        catch {
+            Write-Log "  Error downloading script: $($_.Exception.Message)" -ForegroundColor Red
+            return $false
+        }
+        
+        # Create scheduled task to run the local script with -Resume parameter
+        $taskCmd = "PowerShell.exe -ExecutionPolicy Bypass -NoProfile -WindowStyle Normal -File `"$localScriptPath`" -Resume"
         $currentUser = "$env:USERDOMAIN\$env:USERNAME"
-        Write-Log "  Task will download and run script from GitHub with -Resume parameter" -ForegroundColor Gray
+        Write-Log "  Task will run local script with -Resume parameter" -ForegroundColor Gray
         Write-Log "  Trigger: On user logon ($currentUser)" -ForegroundColor Gray
         
         $result = & schtasks /Create /TN $Global:Config.ResumeTaskName /TR $taskCmd /SC ONLOGON /RU $currentUser /RL HIGHEST /F 2>&1
