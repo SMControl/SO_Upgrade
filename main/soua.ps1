@@ -1,9 +1,11 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.170
+# Version: 3.171
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 # Recent Changes:
+# - Version 3.171: STEP 9 WARNING
+#   - Step 9: Added red warning log if Smart Office is still open after clicking Continue
 # - Version 3.170: CENTERED BUTTONS
 #   - Setup Selection: Centered the buttons in the action panel for a balanced look
 # - Version 3.169: UI REFINEMENTS
@@ -26,7 +28,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.170"
+    ScriptVersion = "3.171"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -599,6 +601,11 @@ function Step9-PostUpgrade {
     
     # Wait for Smart Office to close
     foreach ($process in $Global:Config.Processes.SmartOffice) {
+        # Check if running first to log warning
+        if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+            Write-GuiLog "Warning: Smart Office is still open. Please close it to continue." "Red"
+        }
+        
         while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
             Start-Sleep -Seconds $Global:Config.Timeouts.ProcessCheckInterval
             [System.Windows.Forms.Application]::DoEvents()
