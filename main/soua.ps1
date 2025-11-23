@@ -1,9 +1,11 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.162
+# Version: 3.163
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 # Recent Changes:
+# - Version 3.163: MESSAGE UPDATE
+#   - Updated Step 9 message to clarify Smart Office restart and potential Firebird service restart
 # - Version 3.162: BRANDING & FIREBIRD FIX
 #   - Changed title to "Smart Office Upgrade"
 #   - Added Station Master logo
@@ -11,9 +13,7 @@
 # - Version 3.161: FIX CLOSE BUTTON & REBOOT OPTION
 #   - Fixed Close button not working during setup selection
 #   - Added Red Reboot button to final screen
-# - Version 3.160: SETUP FILE CHECK
-#   - Added Step 2 logic to download and execute module_soget.ps1
-#   - Ensures latest setup files are available before proceeding
+
 
 # ==================================================================================================
 
@@ -26,7 +26,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.162"
+    ScriptVersion = "3.163"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -574,7 +574,7 @@ function Step9-PostUpgrade {
     }
     
     # Confirm upgrade complete
-    Show-ActionButtons -Message "Please ensure the upgrade is complete and Smart Office is closed." -Buttons @{
+    Show-ActionButtons -Message "Please open and close Smart Office before continuing.`nA restart of the Firebird Service may be required." -Buttons @{
         "Continue" = {
             Hide-ActionButtons
         }
