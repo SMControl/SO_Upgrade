@@ -1,9 +1,13 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.168
+# Version: 3.169
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 # Recent Changes:
+# - Version 3.169: UI REFINEMENTS
+#   - Progress Text: Removed "Step X/Y" prefix (cleaner look)
+#   - Setup Buttons: Display only version number (e.g., "030577"), 1.5x larger font
+#   - Spacing: Increased Action Panel height and Form height for better padding
 # - Version 3.168: PROFESSIONAL UI POLISH
 #   - Added white header panel to seamlessly integrate the logo
 #   - Updated title styling (Dark Blue on White)
@@ -12,8 +16,6 @@
 # - Version 3.167: RESTORED 3.164 LAYOUT
 #   - Restored file integrity after manual edit error
 #   - Reverted to 3.164 layout (Large logo, 18pt progress text)
-# - Version 3.166: REVERT LAYOUT
-#   - Reverted UI layout to match version 3.164 (fixed "warped" appearance)
 # ==================================================================================================
 
 # Requires -RunAsAdministrator
@@ -25,7 +27,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.168"
+    ScriptVersion = "3.169"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -110,7 +112,8 @@ function Update-Progress {
     
     $percentage = [math]::Round(($Step / $Global:TotalSteps) * 100)
     $progressBar.Value = $percentage
-    $statusLabel.Text = "Step $Step/$($Global:TotalSteps): $Status"
+    # Removed "Step X/Y:" prefix as requested
+    $statusLabel.Text = $Status
     
     [System.Windows.Forms.Application]::DoEvents()
 }
@@ -504,11 +507,16 @@ function Step8-LaunchSetup {
             $exe = $setupExes[$i]
             $colorIndex = $i % $buttonColors.Count
             
+            # Extract version number from filename (e.g., Setup030577.exe -> 030577)
+            $versionText = [regex]::Match($exe.Name, "Setup(\d+)").Groups[1].Value
+            if ([string]::IsNullOrEmpty($versionText)) { $versionText = $exe.Name } # Fallback
+            
             $button = New-Object System.Windows.Forms.Button
             $button.Location = New-Object System.Drawing.Point($buttonX, 50)
             $button.Size = New-Object System.Drawing.Size($buttonWidth, 45)
-            $button.Text = $exe.Name
-            $button.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+            $button.Text = $versionText
+            # Increased font size to 14pt (approx 1.5x of 9pt)
+            $button.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
             $button.BackColor = $buttonColors[$colorIndex].BG
             $button.ForeColor = $buttonColors[$colorIndex].FG
             $button.FlatStyle = "Flat"
@@ -898,7 +906,8 @@ function Start-UpgradeProcess {
 # Create main form
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Smart Office Upgrade"
-$form.Size = New-Object System.Drawing.Size(800, 600)
+# Increased height to 650 to allow more spacing
+$form.Size = New-Object System.Drawing.Size(800, 650)
 $form.StartPosition = "Manual"
 $form.Location = New-Object System.Drawing.Point(0, 0)
 $form.FormBorderStyle = "FixedDialog"
@@ -987,14 +996,16 @@ $form.Controls.Add($logTextBox)
 # Action Panel
 $actionPanel = New-Object System.Windows.Forms.Panel
 $actionPanel.Location = New-Object System.Drawing.Point(20, 430)
-$actionPanel.Size = New-Object System.Drawing.Size(760, 100)
+# Increased height to 120 to give more space under buttons
+$actionPanel.Size = New-Object System.Drawing.Size(760, 120)
 $actionPanel.BorderStyle = "FixedSingle"
 $actionPanel.BackColor = [System.Drawing.Color]::FromArgb(0, 86, 179)  # #0056b3 - StationMaster Accent
 $form.Controls.Add($actionPanel)
 
 # Close Button
 $closeButton = New-Object System.Windows.Forms.Button
-$closeButton.Location = New-Object System.Drawing.Point(690, 540)
+# Moved down to 570 to account for larger form and action panel
+$closeButton.Location = New-Object System.Drawing.Point(690, 570)
 $closeButton.Size = New-Object System.Drawing.Size(90, 30)
 $closeButton.Text = "Close"
 $closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
