@@ -1,37 +1,20 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.161
+# Version: 3.162
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 # Recent Changes:
+# - Version 3.162: BRANDING & FIREBIRD FIX
+#   - Changed title to "Smart Office Upgrade"
+#   - Added Station Master logo
+#   - Moved Firebird installation to background job to prevent UI freeze
 # - Version 3.161: FIX CLOSE BUTTON & REBOOT OPTION
 #   - Fixed Close button not working during setup selection
 #   - Added Red Reboot button to final screen
 # - Version 3.160: SETUP FILE CHECK
 #   - Added Step 2 logic to download and execute module_soget.ps1
 #   - Ensures latest setup files are available before proceeding
-# - Version 3.150: SIMPLIFIED LOG COLORS
-#   - Made title bigger (14→16pt) for better visibility
-#   - Simplified log colors: white for normal, red for errors, yellow for warnings
-# - Version 3.140: STATIONMASTER BRANDING
-#   - Applied official brand colors from stationmaster.info
-#   - Dark navy background (#003366) matching website hero
-#   - Bright blue accents (#007BFF) for all interactive elements
-#   - White and light blue text for high contrast
-#   - Professional styling matching corporate identity
-# - Version 3.130: COLORFUL SETUP SELECTION
-#   - Replaced setup selection popup with colorful buttons in Action Panel
-#   - Each setup file gets a unique color (green, orange, purple, teal, red, blue)
-#   - Shows filename, date, and version type on each button
-# - Version 3.120: UX IMPROVEMENTS
-#   - Window opens at top-left instead of center
-#   - Replaced popups with GUI buttons for better UX
-#   - Auto-start upgrade process on launch
-#   - Added Action Panel for interactive buttons
-#   - Removed redundant Start Upgrade button
-# - Version 3.110: Added company logo display
-# - Version 3.100: Code review fixes (all critical issues resolved)
-# - Version 3.000: Initial GUI version
+
 # ==================================================================================================
 
 # Requires -RunAsAdministrator
@@ -43,7 +26,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.161"
+    ScriptVersion = "3.162"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -266,16 +249,36 @@ function Step3-CheckFirebird {
     }
     else {
         Write-GuiLog "Firebird is not installed. Installing..." "Yellow"
+        Write-GuiLog "This process runs in the background and may take a few minutes..." "Yellow"
         
         # Define the URL for the Firebird installation script
         $firebirdInstallerURL = $Global:Config.URLs.ModuleFirebird
         
         try {
-            Write-GuiLog "Downloading and executing module_firebird.ps1..." "Yellow"
+            # Run installation in background job to prevent UI freeze
+            $job = Start-Job -ScriptBlock {
+                param($url)
+                try {
+                    # Download and execute the module
+                    $moduleContent = Invoke-RestMethod -Uri $url -ErrorAction Stop
+                    Invoke-Expression $moduleContent
+                }
+                catch {
+                    throw $_
+                }
+            } -ArgumentList $firebirdInstallerURL
             
-            # Download and execute the module
-            $moduleContent = Invoke-RestMethod -Uri $firebirdInstallerURL -ErrorAction Stop
-            Invoke-Expression $moduleContent
+            # Poll job status and keep UI responsive
+            while ($job.State -eq 'Running') {
+                Start-Sleep -Milliseconds 500
+                [System.Windows.Forms.Application]::DoEvents()
+            }
+            
+            $results = Receive-Job -Job $job
+            if ($job.State -eq 'Failed') {
+                throw "Job failed"
+            }
+            Remove-Job -Job $job
             
             Write-GuiLog "Firebird installation script executed." "Green"
             
@@ -896,7 +899,7 @@ function Start-UpgradeProcess {
 
 # Create main form
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Smart Office Upgrade Assistant"
+$form.Text = "Smart Office Upgrade"
 $form.Size = New-Object System.Drawing.Size(800, 600)
 $form.StartPosition = "Manual"
 $form.Location = New-Object System.Drawing.Point(0, 0)
@@ -931,11 +934,19 @@ $form.Add_FormClosing({
 
 
 
+# Logo
+$logoBox = New-Object System.Windows.Forms.PictureBox
+$logoBox.Location = New-Object System.Drawing.Point(20, 10)
+$logoBox.Size = New-Object System.Drawing.Size(120, 50)
+$logoBox.SizeMode = "Zoom"
+$logoBox.ImageLocation = "https://stationmaster.info/logo-station-master.png"
+$form.Controls.Add($logoBox)
+
 # Title Label
 $titleLabel = New-Object System.Windows.Forms.Label
 $titleLabel.Location = New-Object System.Drawing.Point(150, 20)
 $titleLabel.Size = New-Object System.Drawing.Size(630, 30)
-$titleLabel.Text = "Smart Office Upgrade Assistant"
+$titleLabel.Text = "Smart Office Upgrade"
 $titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)  # Was 14, now 16
 $titleLabel.ForeColor = [System.Drawing.Color]::White
 $form.Controls.Add($titleLabel)
@@ -999,7 +1010,7 @@ $closeButton.Add_Click({
 $form.Controls.Add($closeButton)
 
 # Display initial version in log
-Write-GuiLog "Smart Office Upgrade Assistant GUI - v$($Global:Config.ScriptVersion)" "Cyan"
+Write-GuiLog "souaGUI.ps1 - Version $($Global:Config.ScriptVersion)" "Cyan"
 Write-GuiLog "Starting upgrade process..." "Gray"
 Write-GuiLog ""
 
