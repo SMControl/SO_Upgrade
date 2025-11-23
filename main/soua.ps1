@@ -1,20 +1,6 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.163
-# Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
-# ==================================================================================================
-# Recent Changes:
-# - Version 3.163: MESSAGE UPDATE
-#   - Updated Step 9 message to clarify Smart Office restart and potential Firebird service restart
-# - Version 3.162: BRANDING & FIREBIRD FIX
-#   - Changed title to "Smart Office Upgrade"
-#   - Added Station Master logo
-#   - Moved Firebird installation to background job to prevent UI freeze
-# - Version 3.161: FIX CLOSE BUTTON & REBOOT OPTION
-#   - Fixed Close button not working during setup selection
-#   - Added Red Reboot button to final screen
-
-
+# Version: 3.164
 # ==================================================================================================
 
 # Requires -RunAsAdministrator
@@ -26,7 +12,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.163"
+    ScriptVersion = "3.164"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -937,23 +923,23 @@ $form.Add_FormClosing({
 # Logo
 $logoBox = New-Object System.Windows.Forms.PictureBox
 $logoBox.Location = New-Object System.Drawing.Point(20, 10)
-$logoBox.Size = New-Object System.Drawing.Size(120, 50)
+$logoBox.Size = New-Object System.Drawing.Size(180, 75)
 $logoBox.SizeMode = "Zoom"
 $logoBox.ImageLocation = "https://stationmaster.info/logo-station-master.png"
 $form.Controls.Add($logoBox)
 
 # Title Label
 $titleLabel = New-Object System.Windows.Forms.Label
-$titleLabel.Location = New-Object System.Drawing.Point(150, 20)
-$titleLabel.Size = New-Object System.Drawing.Size(630, 30)
+$titleLabel.Location = New-Object System.Drawing.Point(210, 20)
+$titleLabel.Size = New-Object System.Drawing.Size(550, 30)
 $titleLabel.Text = "Smart Office Upgrade"
-$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)  # Was 14, now 16
+$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
 $titleLabel.ForeColor = [System.Drawing.Color]::White
 $form.Controls.Add($titleLabel)
 
 # Step Label
 $stepLabel = New-Object System.Windows.Forms.Label
-$stepLabel.Location = New-Object System.Drawing.Point(20, 60)
+$stepLabel.Location = New-Object System.Drawing.Point(20, 95)
 $stepLabel.Size = New-Object System.Drawing.Size(100, 20)
 $stepLabel.Text = "[0/14]"
 $stepLabel.Font = New-Object System.Drawing.Font("Consolas", 10, [System.Drawing.FontStyle]::Bold)
@@ -962,24 +948,24 @@ $form.Controls.Add($stepLabel)
 
 # Status Label
 $statusLabel = New-Object System.Windows.Forms.Label
-$statusLabel.Location = New-Object System.Drawing.Point(130, 60)
-$statusLabel.Size = New-Object System.Drawing.Size(650, 20)
+$statusLabel.Location = New-Object System.Drawing.Point(130, 95)
+$statusLabel.Size = New-Object System.Drawing.Size(650, 40)
 $statusLabel.Text = "Ready to start upgrade process"
-$statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 18)
 $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(191, 219, 254)  # Light blue
 $form.Controls.Add($statusLabel)
 
 # Progress Bar
 $progressBar = New-Object System.Windows.Forms.ProgressBar
-$progressBar.Location = New-Object System.Drawing.Point(20, 90)
+$progressBar.Location = New-Object System.Drawing.Point(20, 140)
 $progressBar.Size = New-Object System.Drawing.Size(760, 25)
 $progressBar.Style = "Continuous"
 $form.Controls.Add($progressBar)
 
 # Log TextBox
 $logTextBox = New-Object System.Windows.Forms.RichTextBox
-$logTextBox.Location = New-Object System.Drawing.Point(20, 130)
-$logTextBox.Size = New-Object System.Drawing.Size(760, 260)
+$logTextBox.Location = New-Object System.Drawing.Point(20, 180)
+$logTextBox.Size = New-Object System.Drawing.Size(760, 240)
 $logTextBox.Font = New-Object System.Drawing.Font("Consolas", 9)
 $logTextBox.ReadOnly = $true
 $logTextBox.BackColor = [System.Drawing.Color]::FromArgb(31, 41, 55)  # Dark gray
@@ -989,7 +975,7 @@ $form.Controls.Add($logTextBox)
 
 # Action Panel
 $actionPanel = New-Object System.Windows.Forms.Panel
-$actionPanel.Location = New-Object System.Drawing.Point(20, 400)
+$actionPanel.Location = New-Object System.Drawing.Point(20, 430)
 $actionPanel.Size = New-Object System.Drawing.Size(760, 100)
 $actionPanel.BorderStyle = "FixedSingle"
 $actionPanel.BackColor = [System.Drawing.Color]::FromArgb(0, 86, 179)  # #0056b3 - StationMaster Accent
@@ -997,7 +983,7 @@ $form.Controls.Add($actionPanel)
 
 # Close Button
 $closeButton = New-Object System.Windows.Forms.Button
-$closeButton.Location = New-Object System.Drawing.Point(690, 510)
+$closeButton.Location = New-Object System.Drawing.Point(690, 540)
 $closeButton.Size = New-Object System.Drawing.Size(90, 30)
 $closeButton.Text = "Close"
 $closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
