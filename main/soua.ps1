@@ -1,9 +1,11 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.169
+# Version: 3.170
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 # Recent Changes:
+# - Version 3.170: CENTERED BUTTONS
+#   - Setup Selection: Centered the buttons in the action panel for a balanced look
 # - Version 3.169: UI REFINEMENTS
 #   - Progress Text: Removed "Step X/Y" prefix (cleaner look)
 #   - Setup Buttons: Display only version number (e.g., "030577"), 1.5x larger font
@@ -13,9 +15,6 @@
 #   - Updated title styling (Dark Blue on White)
 #   - Removed redundant step label and centered status text
 #   - Refined vertical spacing for a cleaner look
-# - Version 3.167: RESTORED 3.164 LAYOUT
-#   - Restored file integrity after manual edit error
-#   - Reverted to 3.164 layout (Large logo, 18pt progress text)
 # ==================================================================================================
 
 # Requires -RunAsAdministrator
@@ -27,7 +26,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.169"
+    ScriptVersion = "3.170"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -500,9 +499,15 @@ function Step8-LaunchSetup {
         $messageLabel.ForeColor = [System.Drawing.Color]::White
         $actionPanel.Controls.Add($messageLabel)
         
-        # Add buttons
-        $buttonX = 10
+        # Calculate centering
         $buttonWidth = 230
+        $buttonSpacing = 10
+        $totalButtonWidth = ($setupExes.Count * $buttonWidth) + (($setupExes.Count - 1) * $buttonSpacing)
+        $panelWidth = $actionPanel.Width
+        $startX = [math]::Max(10, [math]::Floor(($panelWidth - $totalButtonWidth) / 2))
+        
+        # Add buttons
+        $buttonX = $startX
         for ($i = 0; $i -lt $setupExes.Count; $i++) {
             $exe = $setupExes[$i]
             $colorIndex = $i % $buttonColors.Count
@@ -527,7 +532,7 @@ function Step8-LaunchSetup {
                     Hide-ActionButtons
                 })
             $actionPanel.Controls.Add($button)
-            $buttonX += $buttonWidth + 10
+            $buttonX += $buttonWidth + $buttonSpacing
         }
         
         # Wait for user to select a setup
