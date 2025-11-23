@@ -4,7 +4,7 @@
 A helper script for managing SO upgrades.
 Handles stopping services/processes, downloading setup files, running installers, and restoring state.
 
-![SO Upgrade Screenshot]([https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/SO_Upgrade_Screenshot3.png](https://github.com/SMControl/SO_Upgrade/blob/41893d07b1c29eacbf8b49e638a7995b68c9d437/2025-11-23_0732_.png))
+![SO Upgrade Screenshot](https://github.com/SMControl/SO_Upgrade/blob/main/2025-11-23_0732_.png)
 
 ## Features
 - Installs Firebird with our criteria if needed.
