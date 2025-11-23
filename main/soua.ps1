@@ -1,5 +1,26 @@
+# ==================================================================================================
+# Script: SOUpgradeAssistant_GUI.ps1
+# Version: 3.167
+# Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
+# ==================================================================================================
+# Recent Changes:
+# - Version 3.167: RESTORED 3.164 LAYOUT
+#   - Restored file integrity after manual edit error
+#   - Reverted to 3.164 layout (Large logo, 18pt progress text)
+# - Version 3.166: REVERT LAYOUT
+#   - Reverted UI layout to match version 3.164 (fixed "warped" appearance)
+# ==================================================================================================
+
+# Requires -RunAsAdministrator
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+
+# ==================================================================================================
+# GLOBAL CONFIGURATION
+# ==================================================================================================
+
 $Global:Config = @{
-    ScriptVersion = "3.165"
+    ScriptVersion = "3.167"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -85,6 +106,7 @@ function Update-Progress {
     $percentage = [math]::Round(($Step / $Global:TotalSteps) * 100)
     $progressBar.Value = $percentage
     $statusLabel.Text = "Step $Step/$($Global:TotalSteps): $Status"
+    $stepLabel.Text = "[$Step/$($Global:TotalSteps)]"
     
     [System.Windows.Forms.Application]::DoEvents()
 }
@@ -908,7 +930,7 @@ $form.Add_FormClosing({
 
 # Logo
 $logoBox = New-Object System.Windows.Forms.PictureBox
-$logoBox.Location = New-Object System.Drawing.Point(20, 15)
+$logoBox.Location = New-Object System.Drawing.Point(20, 10)
 $logoBox.Size = New-Object System.Drawing.Size(180, 75)
 $logoBox.SizeMode = "Zoom"
 $logoBox.ImageLocation = "https://stationmaster.info/logo-station-master.png"
@@ -916,35 +938,42 @@ $form.Controls.Add($logoBox)
 
 # Title Label
 $titleLabel = New-Object System.Windows.Forms.Label
-$titleLabel.Location = New-Object System.Drawing.Point(220, 35)
-$titleLabel.Size = New-Object System.Drawing.Size(540, 40)
+$titleLabel.Location = New-Object System.Drawing.Point(210, 20)
+$titleLabel.Size = New-Object System.Drawing.Size(550, 30)
 $titleLabel.Text = "Smart Office Upgrade"
-$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 20, [System.Drawing.FontStyle]::Bold)
-$titleLabel.TextAlign = "MiddleLeft"
+$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
 $titleLabel.ForeColor = [System.Drawing.Color]::White
 $form.Controls.Add($titleLabel)
 
+# Step Label
+$stepLabel = New-Object System.Windows.Forms.Label
+$stepLabel.Location = New-Object System.Drawing.Point(20, 95)
+$stepLabel.Size = New-Object System.Drawing.Size(100, 20)
+$stepLabel.Text = "[0/14]"
+$stepLabel.Font = New-Object System.Drawing.Font("Consolas", 10, [System.Drawing.FontStyle]::Bold)
+$stepLabel.ForeColor = [System.Drawing.Color]::FromArgb(191, 219, 254)  # Light blue
+$form.Controls.Add($stepLabel)
+
 # Status Label
 $statusLabel = New-Object System.Windows.Forms.Label
-$statusLabel.Location = New-Object System.Drawing.Point(20, 100)
-$statusLabel.Size = New-Object System.Drawing.Size(760, 40)
+$statusLabel.Location = New-Object System.Drawing.Point(130, 95)
+$statusLabel.Size = New-Object System.Drawing.Size(650, 40)
 $statusLabel.Text = "Ready to start upgrade process"
-$statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)
-$statusLabel.TextAlign = "MiddleCenter"
+$statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 18)
 $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(191, 219, 254)  # Light blue
 $form.Controls.Add($statusLabel)
 
 # Progress Bar
 $progressBar = New-Object System.Windows.Forms.ProgressBar
-$progressBar.Location = New-Object System.Drawing.Point(20, 150)
+$progressBar.Location = New-Object System.Drawing.Point(20, 140)
 $progressBar.Size = New-Object System.Drawing.Size(760, 25)
 $progressBar.Style = "Continuous"
 $form.Controls.Add($progressBar)
 
 # Log TextBox
 $logTextBox = New-Object System.Windows.Forms.RichTextBox
-$logTextBox.Location = New-Object System.Drawing.Point(20, 190)
-$logTextBox.Size = New-Object System.Drawing.Size(760, 230)
+$logTextBox.Location = New-Object System.Drawing.Point(20, 180)
+$logTextBox.Size = New-Object System.Drawing.Size(760, 240)
 $logTextBox.Font = New-Object System.Drawing.Font("Consolas", 9)
 $logTextBox.ReadOnly = $true
 $logTextBox.BackColor = [System.Drawing.Color]::FromArgb(31, 41, 55)  # Dark gray
