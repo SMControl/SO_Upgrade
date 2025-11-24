@@ -1,37 +1,22 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.161
+# Version: 3.173
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 # Recent Changes:
-# - Version 3.161: FIX CLOSE BUTTON & REBOOT OPTION
-#   - Fixed Close button not working during setup selection
-#   - Added Red Reboot button to final screen
-# - Version 3.160: SETUP FILE CHECK
-#   - Added Step 2 logic to download and execute module_soget.ps1
-#   - Ensures latest setup files are available before proceeding
-# - Version 3.150: SIMPLIFIED LOG COLORS
-#   - Made title bigger (14→16pt) for better visibility
-#   - Simplified log colors: white for normal, red for errors, yellow for warnings
-# - Version 3.140: STATIONMASTER BRANDING
-#   - Applied official brand colors from stationmaster.info
-#   - Dark navy background (#003366) matching website hero
-#   - Bright blue accents (#007BFF) for all interactive elements
-#   - White and light blue text for high contrast
-#   - Professional styling matching corporate identity
-# - Version 3.130: COLORFUL SETUP SELECTION
-#   - Replaced setup selection popup with colorful buttons in Action Panel
-#   - Each setup file gets a unique color (green, orange, purple, teal, red, blue)
-#   - Shows filename, date, and version type on each button
-# - Version 3.120: UX IMPROVEMENTS
-#   - Window opens at top-left instead of center
-#   - Replaced popups with GUI buttons for better UX
-#   - Auto-start upgrade process on launch
-#   - Added Action Panel for interactive buttons
-#   - Removed redundant Start Upgrade button
-# - Version 3.110: Added company logo display
-# - Version 3.100: Code review fixes (all critical issues resolved)
-# - Version 3.000: Initial GUI version
+# - Version 3.173: FINISH & STEP 7 UPDATES
+#   - Step 7: Removed "Continue" button. Script now auto-detects when Smart Office closes.
+#   - Step 14: "Start Smart Office" and "Reboot PC" buttons now explicitly close the GUI form.
+# - Version 3.172: DOWNLOAD PROGRESS
+#   - Step 2: Implemented Marquee progress bar during setup download to keep UI responsive
+# - Version 3.171: STEP 9 WARNING
+#   - Step 9: Added red warning log if Smart Office is still open after clicking Continue
+# - Version 3.170: CENTERED BUTTONS
+#   - Setup Selection: Centered the buttons in the action panel for a balanced look
+# - Version 3.169: UI REFINEMENTS
+#   - Progress Text: Removed "Step X/Y" prefix (cleaner look)
+#   - Setup Buttons: Display only version number (e.g., "030577"), 1.5x larger font
+#   - Spacing: Increased Action Panel height and Form height for better padding
 # ==================================================================================================
 
 # Requires -RunAsAdministrator
@@ -43,7 +28,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.161"
+    ScriptVersion = "3.173"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -128,8 +113,8 @@ function Update-Progress {
     
     $percentage = [math]::Round(($Step / $Global:TotalSteps) * 100)
     $progressBar.Value = $percentage
-    $statusLabel.Text = "Step $Step/$($Global:TotalSteps): $Status"
-    $stepLabel.Text = "[$Step/$($Global:TotalSteps)]"
+    # Removed "Step X/Y:" prefix as requested
+    $statusLabel.Text = $Status
     
     [System.Windows.Forms.Application]::DoEvents()
 }
@@ -226,11 +211,40 @@ function Step2-DownloadSetup {
         Write-GuiLog "Downloading and checking setup files. This may take a moment. Please wait..." "Yellow"
         Write-GuiLog "Invoking module_soget.ps1..." "Yellow"
         
-        # Download the module content
-        $moduleContent = Invoke-RestMethod -Uri $sogetScriptURL -ErrorAction Stop
+        # Switch progress bar to Marquee to show activity
+        $progressBar.Style = "Marquee"
+        $progressBar.MarqueeAnimationSpeed = 30
         
-        # Execute and capture output
-        Invoke-Expression $moduleContent
+        # Run download in background job to keep UI responsive
+        $job = Start-Job -ScriptBlock {
+            param($url)
+            try {
+                # Download the module content
+                $moduleContent = Invoke-RestMethod -Uri $url -ErrorAction Stop
+                # Execute the module content
+                Invoke-Expression $moduleContent
+            }
+            catch {
+                throw $_
+            }
+        } -ArgumentList $sogetScriptURL
+        
+        # Wait for job to complete while keeping UI alive
+        while ($job.State -eq 'Running') {
+            Start-Sleep -Milliseconds 100
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        
+        # Restore progress bar style
+        $progressBar.Style = "Continuous"
+        $progressBar.Value = [math]::Round((2 / $Global:TotalSteps) * 100)
+        
+        # Check job result
+        $results = Receive-Job -Job $job
+        if ($job.State -eq 'Failed') {
+            throw "Job failed"
+        }
+        Remove-Job -Job $job
         
         Write-GuiLog "module_soget.ps1 executed successfully." "Green"
         
@@ -252,6 +266,8 @@ function Step2-DownloadSetup {
         }
     }
     catch {
+        # Restore progress bar style in case of error
+        $progressBar.Style = "Continuous"
         Write-GuiLog "Error executing module_soget.ps1: $($_.Exception.Message)" "Red"
         return $false
     }
@@ -266,16 +282,36 @@ function Step3-CheckFirebird {
     }
     else {
         Write-GuiLog "Firebird is not installed. Installing..." "Yellow"
+        Write-GuiLog "This process runs in the background and may take a few minutes..." "Yellow"
         
         # Define the URL for the Firebird installation script
         $firebirdInstallerURL = $Global:Config.URLs.ModuleFirebird
         
         try {
-            Write-GuiLog "Downloading and executing module_firebird.ps1..." "Yellow"
+            # Run installation in background job to prevent UI freeze
+            $job = Start-Job -ScriptBlock {
+                param($url)
+                try {
+                    # Download and execute the module
+                    $moduleContent = Invoke-RestMethod -Uri $url -ErrorAction Stop
+                    Invoke-Expression $moduleContent
+                }
+                catch {
+                    throw $_
+                }
+            } -ArgumentList $firebirdInstallerURL
             
-            # Download and execute the module
-            $moduleContent = Invoke-RestMethod -Uri $firebirdInstallerURL -ErrorAction Stop
-            Invoke-Expression $moduleContent
+            # Poll job status and keep UI responsive
+            while ($job.State -eq 'Running') {
+                Start-Sleep -Milliseconds 500
+                [System.Windows.Forms.Application]::DoEvents()
+            }
+            
+            $results = Receive-Job -Job $job
+            if ($job.State -eq 'Failed') {
+                throw "Job failed"
+            }
+            Remove-Job -Job $job
             
             Write-GuiLog "Firebird installation script executed." "Green"
             
@@ -390,20 +426,31 @@ function Step7-WaitForClose {
         
         # Show action buttons instead of popup
         Show-ActionButtons -Message "Smart Office is currently running. Please close it to continue." -Buttons @{
-            "Continue" = {
-                Hide-ActionButtons
-            }
-            "Cancel"   = {
+            "Cancel" = {
                 Hide-ActionButtons
                 Write-GuiLog "User cancelled." "Yellow"
                 $Global:UserCancelled = $true
             }
         }
         
-        # Wait for user to click a button
+        # Wait for user to click Cancel OR for Smart Office to close
         while ($actionPanel.Controls.Count -gt 0 -and !$Global:UserCancelled) {
-            Start-Sleep -Milliseconds 100
+            Start-Sleep -Milliseconds 500
             [System.Windows.Forms.Application]::DoEvents()
+            
+            # Check if Smart Office closed
+            $stillRunning = $false
+            foreach ($process in $Global:Config.Processes.SmartOffice) {
+                if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+                    $stillRunning = $true
+                    break
+                }
+            }
+            
+            if (-not $stillRunning) {
+                Hide-ActionButtons
+                break
+            }
         }
         
         if ($Global:UserCancelled) {
@@ -411,7 +458,7 @@ function Step7-WaitForClose {
             return $false
         }
         
-        # Wait for processes to close
+        # Double check / wait for any stragglers
         foreach ($process in $Global:Config.Processes.SmartOffice) {
             while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
                 Start-Sleep -Seconds $Global:Config.Timeouts.ProcessCheckInterval
@@ -496,18 +543,29 @@ function Step8-LaunchSetup {
         $messageLabel.ForeColor = [System.Drawing.Color]::White
         $actionPanel.Controls.Add($messageLabel)
         
-        # Add buttons
-        $buttonX = 10
+        # Calculate centering
         $buttonWidth = 230
+        $buttonSpacing = 10
+        $totalButtonWidth = ($setupExes.Count * $buttonWidth) + (($setupExes.Count - 1) * $buttonSpacing)
+        $panelWidth = $actionPanel.Width
+        $startX = [math]::Max(10, [math]::Floor(($panelWidth - $totalButtonWidth) / 2))
+        
+        # Add buttons
+        $buttonX = $startX
         for ($i = 0; $i -lt $setupExes.Count; $i++) {
             $exe = $setupExes[$i]
             $colorIndex = $i % $buttonColors.Count
             
+            # Extract version number from filename (e.g., Setup030577.exe -> 030577)
+            $versionText = [regex]::Match($exe.Name, "Setup(\d+)").Groups[1].Value
+            if ([string]::IsNullOrEmpty($versionText)) { $versionText = $exe.Name } # Fallback
+            
             $button = New-Object System.Windows.Forms.Button
             $button.Location = New-Object System.Drawing.Point($buttonX, 50)
             $button.Size = New-Object System.Drawing.Size($buttonWidth, 45)
-            $button.Text = $exe.Name
-            $button.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+            $button.Text = $versionText
+            # Increased font size to 14pt (approx 1.5x of 9pt)
+            $button.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
             $button.BackColor = $buttonColors[$colorIndex].BG
             $button.ForeColor = $buttonColors[$colorIndex].FG
             $button.FlatStyle = "Flat"
@@ -518,7 +576,7 @@ function Step8-LaunchSetup {
                     Hide-ActionButtons
                 })
             $actionPanel.Controls.Add($button)
-            $buttonX += $buttonWidth + 10
+            $buttonX += $buttonWidth + $buttonSpacing
         }
         
         # Wait for user to select a setup
@@ -571,7 +629,7 @@ function Step9-PostUpgrade {
     }
     
     # Confirm upgrade complete
-    Show-ActionButtons -Message "Please ensure the upgrade is complete and Smart Office is closed." -Buttons @{
+    Show-ActionButtons -Message "Please open and close Smart Office before continuing.`nA restart of the Firebird Service may be required." -Buttons @{
         "Continue" = {
             Hide-ActionButtons
         }
@@ -585,6 +643,11 @@ function Step9-PostUpgrade {
     
     # Wait for Smart Office to close
     foreach ($process in $Global:Config.Processes.SmartOffice) {
+        # Check if running first to log warning
+        if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+            Write-GuiLog "Warning: Smart Office is still open. Please close it to continue." "Red"
+        }
+        
         while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
             Start-Sleep -Seconds $Global:Config.Timeouts.ProcessCheckInterval
             [System.Windows.Forms.Application]::DoEvents()
@@ -810,6 +873,7 @@ function Step14-Finish {
             try {
                 Start-Process (Join-Path $Global:Config.Paths.StationMaster "Sm32.exe") -ErrorAction Stop
                 Write-GuiLog "Smart Office started." "Green"
+                $form.Close()
             }
             catch {
                 Write-GuiLog "Error starting Smart Office: $($_.Exception.Message)" "Red"
@@ -831,6 +895,7 @@ function Step14-Finish {
             if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                 Hide-ActionButtons
                 Write-GuiLog "Rebooting system..." "Red"
+                $form.Close()
                 Restart-Computer -Force
             }
         })
@@ -896,8 +961,9 @@ function Start-UpgradeProcess {
 
 # Create main form
 $form = New-Object System.Windows.Forms.Form
-$form.Text = "Smart Office Upgrade Assistant"
-$form.Size = New-Object System.Drawing.Size(800, 600)
+$form.Text = "Smart Office Upgrade"
+# Increased height to 650 to allow more spacing
+$form.Size = New-Object System.Drawing.Size(800, 650)
 $form.StartPosition = "Manual"
 $form.Location = New-Object System.Drawing.Point(0, 0)
 $form.FormBorderStyle = "FixedDialog"
@@ -929,62 +995,53 @@ $form.Add_FormClosing({
         Invoke-Cleanup
     })
 
-# Logo PictureBox
-$logoPictureBox = New-Object System.Windows.Forms.PictureBox
-$logoPictureBox.Location = New-Object System.Drawing.Point(20, 15)
-$logoPictureBox.Size = New-Object System.Drawing.Size(120, 40)
-$logoPictureBox.SizeMode = "Zoom"
 
-# Try to load logo from script directory
-$logoPath = Join-Path $PSScriptRoot "logo-station-master.png"
-if (Test-Path $logoPath) {
-    try {
-        $logoPictureBox.Image = [System.Drawing.Image]::FromFile($logoPath)
-    }
-    catch {
-        # Logo failed to load, just skip it
-    }
-}
-$form.Controls.Add($logoPictureBox)
 
-# Title Label
+# Header Panel (White background for Logo and Title)
+$headerPanel = New-Object System.Windows.Forms.Panel
+$headerPanel.Dock = "Top"
+$headerPanel.Height = 100
+$headerPanel.BackColor = [System.Drawing.Color]::White
+$form.Controls.Add($headerPanel)
+
+# Logo (Inside Header)
+$logoBox = New-Object System.Windows.Forms.PictureBox
+$logoBox.Location = New-Object System.Drawing.Point(20, 12)
+$logoBox.Size = New-Object System.Drawing.Size(180, 75)
+$logoBox.SizeMode = "Zoom"
+$logoBox.ImageLocation = "https://stationmaster.info/logo-station-master.png"
+$headerPanel.Controls.Add($logoBox)
+
+# Title Label (Inside Header)
 $titleLabel = New-Object System.Windows.Forms.Label
-$titleLabel.Location = New-Object System.Drawing.Point(150, 20)
-$titleLabel.Size = New-Object System.Drawing.Size(630, 30)
-$titleLabel.Text = "Smart Office Upgrade Assistant"
-$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 16, [System.Drawing.FontStyle]::Bold)  # Was 14, now 16
-$titleLabel.ForeColor = [System.Drawing.Color]::White
-$form.Controls.Add($titleLabel)
-
-# Step Label
-$stepLabel = New-Object System.Windows.Forms.Label
-$stepLabel.Location = New-Object System.Drawing.Point(20, 60)
-$stepLabel.Size = New-Object System.Drawing.Size(100, 20)
-$stepLabel.Text = "[0/14]"
-$stepLabel.Font = New-Object System.Drawing.Font("Consolas", 10, [System.Drawing.FontStyle]::Bold)
-$stepLabel.ForeColor = [System.Drawing.Color]::FromArgb(191, 219, 254)  # Light blue
-$form.Controls.Add($stepLabel)
+$titleLabel.Location = New-Object System.Drawing.Point(220, 30)
+$titleLabel.Size = New-Object System.Drawing.Size(550, 40)
+$titleLabel.Text = "Smart Office Upgrade"
+$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 20, [System.Drawing.FontStyle]::Bold)
+$titleLabel.ForeColor = [System.Drawing.Color]::FromArgb(0, 51, 102) # StationMaster Blue
+$headerPanel.Controls.Add($titleLabel)
 
 # Status Label
 $statusLabel = New-Object System.Windows.Forms.Label
-$statusLabel.Location = New-Object System.Drawing.Point(130, 60)
-$statusLabel.Size = New-Object System.Drawing.Size(650, 20)
+$statusLabel.Location = New-Object System.Drawing.Point(20, 120)
+$statusLabel.Size = New-Object System.Drawing.Size(760, 30)
 $statusLabel.Text = "Ready to start upgrade process"
-$statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 9)
+$statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
+$statusLabel.TextAlign = "MiddleCenter"
 $statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(191, 219, 254)  # Light blue
 $form.Controls.Add($statusLabel)
 
 # Progress Bar
 $progressBar = New-Object System.Windows.Forms.ProgressBar
-$progressBar.Location = New-Object System.Drawing.Point(20, 90)
+$progressBar.Location = New-Object System.Drawing.Point(20, 160)
 $progressBar.Size = New-Object System.Drawing.Size(760, 25)
 $progressBar.Style = "Continuous"
 $form.Controls.Add($progressBar)
 
 # Log TextBox
 $logTextBox = New-Object System.Windows.Forms.RichTextBox
-$logTextBox.Location = New-Object System.Drawing.Point(20, 130)
-$logTextBox.Size = New-Object System.Drawing.Size(760, 260)
+$logTextBox.Location = New-Object System.Drawing.Point(20, 200)
+$logTextBox.Size = New-Object System.Drawing.Size(760, 220)
 $logTextBox.Font = New-Object System.Drawing.Font("Consolas", 9)
 $logTextBox.ReadOnly = $true
 $logTextBox.BackColor = [System.Drawing.Color]::FromArgb(31, 41, 55)  # Dark gray
@@ -994,15 +1051,17 @@ $form.Controls.Add($logTextBox)
 
 # Action Panel
 $actionPanel = New-Object System.Windows.Forms.Panel
-$actionPanel.Location = New-Object System.Drawing.Point(20, 400)
-$actionPanel.Size = New-Object System.Drawing.Size(760, 100)
+$actionPanel.Location = New-Object System.Drawing.Point(20, 430)
+# Increased height to 120 to give more space under buttons
+$actionPanel.Size = New-Object System.Drawing.Size(760, 120)
 $actionPanel.BorderStyle = "FixedSingle"
 $actionPanel.BackColor = [System.Drawing.Color]::FromArgb(0, 86, 179)  # #0056b3 - StationMaster Accent
 $form.Controls.Add($actionPanel)
 
 # Close Button
 $closeButton = New-Object System.Windows.Forms.Button
-$closeButton.Location = New-Object System.Drawing.Point(690, 510)
+# Moved down to 570 to account for larger form and action panel
+$closeButton.Location = New-Object System.Drawing.Point(690, 570)
 $closeButton.Size = New-Object System.Drawing.Size(90, 30)
 $closeButton.Text = "Close"
 $closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
@@ -1015,7 +1074,7 @@ $closeButton.Add_Click({
 $form.Controls.Add($closeButton)
 
 # Display initial version in log
-Write-GuiLog "Smart Office Upgrade Assistant GUI - v$($Global:Config.ScriptVersion)" "Cyan"
+Write-GuiLog "souaGUI.ps1 - Version $($Global:Config.ScriptVersion)" "Cyan"
 Write-GuiLog "Starting upgrade process..." "Gray"
 Write-GuiLog ""
 
