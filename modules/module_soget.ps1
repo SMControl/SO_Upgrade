@@ -1,4 +1,4 @@
-# module_soget.ps1 - Version 1.00
+# module_soget.ps1 - Version 1.01
 # ==================================
 # Part 1 - Check if scheduled task exists and create if it doesn't
 # ==================================
@@ -42,11 +42,13 @@ foreach ($downloadLink in $highestTwoLinks) {
         $response = $request.GetResponse()
         $contentLength = $response.ContentLength
         $response.Close()
-    } catch {
+    }
+    catch {
         return
     }
     $existingFiles = Get-ChildItem -Path $downloadDirectory -Filter "*.exe"
-    $fileExists = $existingFiles | Where-Object { $_.Length -eq $contentLength }
+    $fileExists = $existingFiles | Where-Object { $_.Name -eq $originalFilename -and $_.Length -eq $contentLength }
+    #$fileExists = $existingFiles | Where-Object { $_.Length -eq $contentLength }
     if (-not $fileExists) {
         Write-Host "Downloading new version: $originalFilename" -ForegroundColor Green
         Invoke-WebRequest -Uri $downloadLink -OutFile $destinationPath
