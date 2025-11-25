@@ -1,22 +1,7 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.171
+# Version: 3.180
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
-# ==================================================================================================
-# Recent Changes:
-# - Version 3.171: STEP 9 WARNING
-#   - Step 9: Added red warning log if Smart Office is still open after clicking Continue
-# - Version 3.170: CENTERED BUTTONS
-#   - Setup Selection: Centered the buttons in the action panel for a balanced look
-# - Version 3.169: UI REFINEMENTS
-#   - Progress Text: Removed "Step X/Y" prefix (cleaner look)
-#   - Setup Buttons: Display only version number (e.g., "030577"), 1.5x larger font
-#   - Spacing: Increased Action Panel height and Form height for better padding
-# - Version 3.168: PROFESSIONAL UI POLISH
-#   - Added white header panel to seamlessly integrate the logo
-#   - Updated title styling (Dark Blue on White)
-#   - Removed redundant step label and centered status text
-#   - Refined vertical spacing for a cleaner look
 # ==================================================================================================
 
 # Requires -RunAsAdministrator
@@ -28,7 +13,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.171"
+    ScriptVersion = "3.180"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -211,11 +196,40 @@ function Step2-DownloadSetup {
         Write-GuiLog "Downloading and checking setup files. This may take a moment. Please wait..." "Yellow"
         Write-GuiLog "Invoking module_soget.ps1..." "Yellow"
         
-        # Download the module content
-        $moduleContent = Invoke-RestMethod -Uri $sogetScriptURL -ErrorAction Stop
+        # Switch progress bar to Marquee to show activity
+        $progressBar.Style = "Marquee"
+        $progressBar.MarqueeAnimationSpeed = 30
         
-        # Execute and capture output
-        Invoke-Expression $moduleContent
+        # Run download in background job to keep UI responsive
+        $job = Start-Job -ScriptBlock {
+            param($url)
+            try {
+                # Download the module content
+                $moduleContent = Invoke-RestMethod -Uri $url -ErrorAction Stop
+                # Execute the module content
+                Invoke-Expression $moduleContent
+            }
+            catch {
+                throw $_
+            }
+        } -ArgumentList $sogetScriptURL
+        
+        # Wait for job to complete while keeping UI alive
+        while ($job.State -eq 'Running') {
+            Start-Sleep -Milliseconds 100
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        
+        # Restore progress bar style
+        $progressBar.Style = "Continuous"
+        $progressBar.Value = [math]::Round((2 / $Global:TotalSteps) * 100)
+        
+        # Check job result
+        $results = Receive-Job -Job $job
+        if ($job.State -eq 'Failed') {
+            throw "Job failed"
+        }
+        Remove-Job -Job $job
         
         Write-GuiLog "module_soget.ps1 executed successfully." "Green"
         
@@ -237,6 +251,8 @@ function Step2-DownloadSetup {
         }
     }
     catch {
+        # Restore progress bar style in case of error
+        $progressBar.Style = "Continuous"
         Write-GuiLog "Error executing module_soget.ps1: $($_.Exception.Message)" "Red"
         return $false
     }
@@ -395,20 +411,31 @@ function Step7-WaitForClose {
         
         # Show action buttons instead of popup
         Show-ActionButtons -Message "Smart Office is currently running. Please close it to continue." -Buttons @{
-            "Continue" = {
-                Hide-ActionButtons
-            }
-            "Cancel"   = {
+            "Cancel" = {
                 Hide-ActionButtons
                 Write-GuiLog "User cancelled." "Yellow"
                 $Global:UserCancelled = $true
             }
         }
         
-        # Wait for user to click a button
+        # Wait for user to click Cancel OR for Smart Office to close
         while ($actionPanel.Controls.Count -gt 0 -and !$Global:UserCancelled) {
-            Start-Sleep -Milliseconds 100
+            Start-Sleep -Milliseconds 500
             [System.Windows.Forms.Application]::DoEvents()
+            
+            # Check if Smart Office closed
+            $stillRunning = $false
+            foreach ($process in $Global:Config.Processes.SmartOffice) {
+                if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+                    $stillRunning = $true
+                    break
+                }
+            }
+            
+            if (-not $stillRunning) {
+                Hide-ActionButtons
+                break
+            }
         }
         
         if ($Global:UserCancelled) {
@@ -416,7 +443,7 @@ function Step7-WaitForClose {
             return $false
         }
         
-        # Wait for processes to close
+        # Double check / wait for any stragglers
         foreach ($process in $Global:Config.Processes.SmartOffice) {
             while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
                 Start-Sleep -Seconds $Global:Config.Timeouts.ProcessCheckInterval
@@ -831,6 +858,7 @@ function Step14-Finish {
             try {
                 Start-Process (Join-Path $Global:Config.Paths.StationMaster "Sm32.exe") -ErrorAction Stop
                 Write-GuiLog "Smart Office started." "Green"
+                $form.Close()
             }
             catch {
                 Write-GuiLog "Error starting Smart Office: $($_.Exception.Message)" "Red"
@@ -852,6 +880,7 @@ function Step14-Finish {
             if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
                 Hide-ActionButtons
                 Write-GuiLog "Rebooting system..." "Red"
+                $form.Close()
                 Restart-Computer -Force
             }
         })
@@ -921,9 +950,10 @@ $form.Text = "Smart Office Upgrade"
 # Increased height to 650 to allow more spacing
 $form.Size = New-Object System.Drawing.Size(800, 650)
 $form.StartPosition = "Manual"
-$form.Location = New-Object System.Drawing.Point(0, 0)
+$form.Location = New-Object System.Drawing.Point(10, 10)
 $form.FormBorderStyle = "FixedDialog"
 $form.MaximizeBox = $false
+$form.MinimizeBox = $false
 $form.BackColor = [System.Drawing.Color]::FromArgb(0, 51, 102)  # #003366 - StationMaster Primary
 
 # Add form closing event for cleanup
