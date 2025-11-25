@@ -1,6 +1,6 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.180
+# Version: 3.182
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 
@@ -155,7 +155,7 @@ function Hide-ActionButtons {
 # ==================================================================================================
 
 function Invoke-Cleanup {
-    Write-GuiLog "Performing cleanup..." "Yellow"
+    #Write-GuiLog "Performing cleanup..." "Yellow"
     
     # Stop monitoring job if running
     if ($Global:MonitorJob) {
@@ -164,7 +164,7 @@ function Invoke-Cleanup {
         $Global:MonitorJob = $null
     }
     
-    Write-GuiLog "Cleanup complete." "Green"
+    #Write-GuiLog "Cleanup complete." "Green"
 }
 
 # ==================================================================================================
@@ -614,7 +614,7 @@ function Step9-PostUpgrade {
     }
     
     # Confirm upgrade complete
-    Show-ActionButtons -Message "Please open and close Smart Office before continuing.`nA restart of the Firebird Service may be required." -Buttons @{
+    Show-ActionButtons -Message "Setup is finished. Please Open and Close SmartOffice to complete database updates; then press Continue." -Buttons @{
         "Continue" = {
             Hide-ActionButtons
         }
@@ -817,20 +817,60 @@ function Step13-RevertPDTWiFi {
 function Step14-Finish {
     Update-Progress 14 "Finalizing..."
     Write-GuiLog "[Step 14/14] Finishing Up" "Cyan"
-    
     # Calculate execution time
     $endTime = Get-Date
     $executionTime = $endTime - $Global:StartTime
     $totalMinutes = [math]::Floor($executionTime.TotalMinutes)
     $totalSeconds = $executionTime.Seconds
     
-    Write-GuiLog "" "Green"
-    Write-GuiLog "========================================" "Green"
-    Write-GuiLog "UPGRADE COMPLETE!" "Green"
-    Write-GuiLog "========================================" "Green"
-    Write-GuiLog "Completed in $($totalMinutes)m $($totalSeconds)s." "Green"
-    Write-GuiLog "" "Green"
+    # Add spacing to push content down in the log
+    Write-GuiLog "" "White"
+    Write-GuiLog "" "White"
+    Write-GuiLog "" "White"
+    Write-GuiLog "" "White"
+    Write-GuiLog "" "White"
     
+    # Display completion banner
+    Write-GuiLog "========================================" "Green"
+    Write-GuiLog "       UPGRADE COMPLETE!                " "Green"
+    Write-GuiLog "========================================" "Green"
+    Write-GuiLog "" "White"
+    Write-GuiLog "Completed in $($totalMinutes)m $($totalSeconds)s." "Green"
+    Write-GuiLog "" "White"
+    
+    # Display status table
+    Write-GuiLog "Current System Status:" "White"
+    Write-GuiLog "----------------------------------------" "White"
+    
+    # Check LiveSales service
+    $liveSalesService = Get-Service -Name $Global:Config.Services.LiveSales -ErrorAction SilentlyContinue
+    if ($liveSalesService -and $liveSalesService.Status -eq "Running") {
+        Write-GuiLog "  SO Live Sales Service:  Running" "Green"
+    }
+    else {
+        Write-GuiLog "  SO Live Sales Service:  Not Running" "Yellow"
+    }
+    
+    # Check PDTWiFi
+    $pdtWiFiProc = Get-Process -Name $Global:Config.Processes.PDTWiFi -ErrorAction SilentlyContinue
+    if ($pdtWiFiProc) {
+        Write-GuiLog "  PDTWiFi:                Running" "Green"
+    }
+    else {
+        Write-GuiLog "  PDTWiFi:                Not Running" "Yellow"
+    }
+    
+    # Check PDTWiFi64
+    $pdtWiFi64Proc = Get-Process -Name $Global:Config.Processes.PDTWiFi64 -ErrorAction SilentlyContinue
+    if ($pdtWiFi64Proc) {
+        Write-GuiLog "  PDTWiFi64:              Running" "Green"
+    }
+    else {
+        Write-GuiLog "  PDTWiFi64:              Not Running" "Yellow"
+    }
+    
+    Write-GuiLog "----------------------------------------" "White"
+    Write-GuiLog "" "White"    
     # Show completion options
     # Show completion options with custom buttons
     $actionPanel.Controls.Clear()
@@ -839,7 +879,7 @@ function Step14-Finish {
     $messageLabel = New-Object System.Windows.Forms.Label
     $messageLabel.Location = New-Object System.Drawing.Point(10, 10)
     $messageLabel.Size = New-Object System.Drawing.Size(740, 30)
-    $messageLabel.Text = "Upgrade completed successfully! Choose an action:"
+    $messageLabel.Text = "Upgrade completed. Consider Rebooting."
     $messageLabel.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
     $messageLabel.ForeColor = [System.Drawing.Color]::White
     $actionPanel.Controls.Add($messageLabel)
