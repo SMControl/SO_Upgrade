@@ -1,6 +1,6 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.182
+# Version: 3.185
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 
@@ -193,12 +193,12 @@ function Step2-DownloadSetup {
     $sogetScriptURL = $Global:Config.URLs.ModuleSOGets
     
     try {
-        Write-GuiLog "Downloading and checking setup files. This may take a moment. Please wait..." "Yellow"
-        Write-GuiLog "Invoking module_soget.ps1..." "Yellow"
+        Write-GuiLog "Checking for newer Setup Files" "Yellow"
+        Write-GuiLog "Downloading new files. Please Wait..." "Yellow"
         
         # Switch progress bar to Marquee to show activity
-        $progressBar.Style = "Marquee"
-        $progressBar.MarqueeAnimationSpeed = 30
+        #$progressBar.Style = "Marquee"
+        #$progressBar.MarqueeAnimationSpeed = 30
         
         # Run download in background job to keep UI responsive
         $job = Start-Job -ScriptBlock {
@@ -214,11 +214,40 @@ function Step2-DownloadSetup {
             }
         } -ArgumentList $sogetScriptURL
         
-        # Wait for job to complete while keeping UI alive
+        # Wait for job to complete while keeping UI alive and showing download progress
+        $lastSize = 0
+        $noChangeCount = 0
         while ($job.State -eq 'Running') {
-            Start-Sleep -Milliseconds 100
+            # Check for downloaded files
+            $setupFiles = Get-ChildItem -Path $Global:Config.Paths.SetupDir -Filter "*.exe" -ErrorAction SilentlyContinue
+            
+            if ($setupFiles) {
+                # Get the newest file (most recent download) and refresh its info
+                $currentFile = $setupFiles | Sort-Object CreationTime -Descending | Select-Object -First 1
+                # Force refresh of file info to get actual current size
+                $freshFileInfo = Get-Item $currentFile.FullName -Force
+                $currentSize = $freshFileInfo.Length
+                $sizeMB = [math]::Round($currentSize / 1MB, 1)
+                # Update status label with file size
+                $statusLabel.Text = "Downloading... $($sizeMB.ToString('0.0').PadLeft(6)) MB"
+                $statusLabel.Refresh()  # Force immediate UI update
+                
+                # Track if file size is changing
+                if ($currentSize -eq $lastSize) {
+                    $noChangeCount++
+                }
+                else {
+                    $noChangeCount = 0
+                    $lastSize = $currentSize
+                }
+            }
+            
+            Start-Sleep -Milliseconds 50
             [System.Windows.Forms.Application]::DoEvents()
         }
+        
+        # Restore status label
+        $statusLabel.Text = "Checking for setup files..."
         
         # Restore progress bar style
         $progressBar.Style = "Continuous"
@@ -530,7 +559,7 @@ function Step8-LaunchSetup {
         
         # Calculate centering
         $buttonWidth = 230
-        $buttonSpacing = 10
+        $buttonSpacing = 50
         $totalButtonWidth = ($setupExes.Count * $buttonWidth) + (($setupExes.Count - 1) * $buttonSpacing)
         $panelWidth = $actionPanel.Width
         $startX = [math]::Max(10, [math]::Floor(($panelWidth - $totalButtonWidth) / 2))
@@ -584,7 +613,13 @@ function Step8-LaunchSetup {
     # Launch setup
     try {
         Write-GuiLog "Starting setup: $($Global:SelectedExe.Name)..." "Cyan"
-        $setupProcess = Start-Process -FilePath $Global:SelectedExe.FullName -Wait -PassThru
+        $setupProcess = Start-Process -FilePath $Global:SelectedExe.FullName -PassThru
+
+        # Wait for setup to complete while keeping UI responsive
+        while (-not $setupProcess.HasExited) {
+            Start-Sleep -Milliseconds 500
+            [System.Windows.Forms.Application]::DoEvents()
+        }
         
         if ($setupProcess.ExitCode -eq 0) {
             Write-GuiLog "Setup completed successfully." "Green"
@@ -988,7 +1023,7 @@ function Start-UpgradeProcess {
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Smart Office Upgrade"
 # Increased height to 650 to allow more spacing
-$form.Size = New-Object System.Drawing.Size(800, 650)
+$form.Size = New-Object System.Drawing.Size(810, 610)
 $form.StartPosition = "Manual"
 $form.Location = New-Object System.Drawing.Point(10, 10)
 $form.FormBorderStyle = "FixedDialog"
@@ -1043,7 +1078,7 @@ $titleLabel = New-Object System.Windows.Forms.Label
 $titleLabel.Location = New-Object System.Drawing.Point(220, 30)
 $titleLabel.Size = New-Object System.Drawing.Size(550, 40)
 $titleLabel.Text = "Smart Office Upgrade"
-$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 20, [System.Drawing.FontStyle]::Bold)
+$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 22, [System.Drawing.FontStyle]::Bold)
 $titleLabel.ForeColor = [System.Drawing.Color]::FromArgb(0, 51, 102) # StationMaster Blue
 $headerPanel.Controls.Add($titleLabel)
 
@@ -1083,21 +1118,6 @@ $actionPanel.Size = New-Object System.Drawing.Size(760, 120)
 $actionPanel.BorderStyle = "FixedSingle"
 $actionPanel.BackColor = [System.Drawing.Color]::FromArgb(0, 86, 179)  # #0056b3 - StationMaster Accent
 $form.Controls.Add($actionPanel)
-
-# Close Button
-$closeButton = New-Object System.Windows.Forms.Button
-# Moved down to 570 to account for larger form and action panel
-$closeButton.Location = New-Object System.Drawing.Point(690, 570)
-$closeButton.Size = New-Object System.Drawing.Size(90, 30)
-$closeButton.Text = "Close"
-$closeButton.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
-$closeButton.BackColor = [System.Drawing.Color]::FromArgb(107, 114, 128)  # Gray
-$closeButton.ForeColor = [System.Drawing.Color]::White
-$closeButton.FlatStyle = "Flat"
-$closeButton.Add_Click({
-        $form.Close()
-    })
-$form.Controls.Add($closeButton)
 
 # Display initial version in log
 Write-GuiLog "souaGUI.ps1 - Version $($Global:Config.ScriptVersion)" "Cyan"
