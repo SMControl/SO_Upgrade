@@ -1,6 +1,6 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.185
+# Version: 3.189
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 
@@ -13,7 +13,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.180"
+    ScriptVersion = "3.189"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -123,7 +123,7 @@ function Show-ActionButtons {
     # Add message label
     $messageLabel = New-Object System.Windows.Forms.Label
     $messageLabel.Location = New-Object System.Drawing.Point(10, 10)
-    $messageLabel.Size = New-Object System.Drawing.Size(740, 40)
+    $messageLabel.Size = New-Object System.Drawing.Size(555, 40)
     $messageLabel.Text = $Message
     $messageLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10)
     $messageLabel.ForeColor = [System.Drawing.Color]::White
@@ -551,7 +551,7 @@ function Step8-LaunchSetup {
         # Add message label
         $messageLabel = New-Object System.Windows.Forms.Label
         $messageLabel.Location = New-Object System.Drawing.Point(10, 10)
-        $messageLabel.Size = New-Object System.Drawing.Size(740, 30)
+        $messageLabel.Size = New-Object System.Drawing.Size(555, 30)
         $messageLabel.Text = "Select Smart Office version to install:"
         $messageLabel.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
         $messageLabel.ForeColor = [System.Drawing.Color]::White
@@ -648,29 +648,62 @@ function Step9-PostUpgrade {
         Write-GuiLog "SMUpdates monitoring stopped." "Green"
     }
     
-    # Confirm upgrade complete
-    Show-ActionButtons -Message "Setup is finished. Please Open and Close SmartOffice to complete database updates; then press Continue." -Buttons @{
-        "Continue" = {
-            Hide-ActionButtons
-        }
-    }
+    $smartOfficeHasRun = $false
+    $script:continueClicked = $false
+    $lastState = "" # To avoid flickering
     
-    # Wait for user to click Continue
-    while ($actionPanel.Controls.Count -gt 0) {
-        Start-Sleep -Milliseconds 100
-        [System.Windows.Forms.Application]::DoEvents()
-    }
-    
-    # Wait for Smart Office to close
-    foreach ($process in $Global:Config.Processes.SmartOffice) {
-        # Check if running first to log warning
-        if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
-            Write-GuiLog "Warning: Smart Office is still open. Please close it to continue." "Red"
+    while (-not $script:continueClicked) {
+        # Check if SmartOffice is running
+        $soRunning = $false
+        foreach ($process in $Global:Config.Processes.SmartOffice) {
+            if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+                $soRunning = $true
+                $smartOfficeHasRun = $true
+                break
+            }
         }
         
-        while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
-            Start-Sleep -Seconds $Global:Config.Timeouts.ProcessCheckInterval
-            [System.Windows.Forms.Application]::DoEvents()
+        # Determine current state
+        if ($soRunning) {
+            # [B] SmartOffice is running
+            $currentState = "B"
+        }
+        elseif (-not $smartOfficeHasRun) {
+            # [A] Waiting for Setup/Initial (SO hasn't run yet)
+            $currentState = "A"
+        }
+        else {
+            # [C] SO was running and is now closed
+            $currentState = "C"
+        }
+        
+        # Update UI if state changed
+        if ($currentState -ne $lastState) {
+            $lastState = $currentState
+            
+            switch ($currentState) {
+                "A" {
+                    Show-ActionButtons -Message "Finish Setup and Open SmartOffice" -Buttons @{}
+                }
+                "B" {
+                    Show-ActionButtons -Message "Waiting for SmartOffice to be closed." -Buttons @{}
+                }
+                "C" {
+                    Show-ActionButtons -Message "Continue when SmartOffice is closed." -Buttons @{
+                        "Continue" = {
+                            $script:continueClicked = $true
+                            Hide-ActionButtons
+                        }
+                    }
+                }
+            }
+        }
+        
+        Start-Sleep -Milliseconds 500
+        [System.Windows.Forms.Application]::DoEvents()
+        
+        if ($Global:UserCancelled -or $form.IsDisposed) {
+            return $false
         }
     }
     
@@ -913,7 +946,7 @@ function Step14-Finish {
     # Message
     $messageLabel = New-Object System.Windows.Forms.Label
     $messageLabel.Location = New-Object System.Drawing.Point(10, 10)
-    $messageLabel.Size = New-Object System.Drawing.Size(740, 30)
+    $messageLabel.Size = New-Object System.Drawing.Size(555, 30)
     $messageLabel.Text = "Upgrade completed. Consider Rebooting."
     $messageLabel.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
     $messageLabel.ForeColor = [System.Drawing.Color]::White
@@ -1022,8 +1055,8 @@ function Start-UpgradeProcess {
 # Create main form
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Smart Office Upgrade"
-# Increased height to 650 to allow more spacing
-$form.Size = New-Object System.Drawing.Size(810, 610)
+# Reduced width by 25% for better compatibility with lower resolution screens
+$form.Size = New-Object System.Drawing.Size(608, 610)
 $form.StartPosition = "Manual"
 $form.Location = New-Object System.Drawing.Point(10, 10)
 $form.FormBorderStyle = "FixedDialog"
@@ -1076,7 +1109,7 @@ $headerPanel.Controls.Add($logoBox)
 # Title Label (Inside Header)
 $titleLabel = New-Object System.Windows.Forms.Label
 $titleLabel.Location = New-Object System.Drawing.Point(220, 30)
-$titleLabel.Size = New-Object System.Drawing.Size(550, 40)
+$titleLabel.Size = New-Object System.Drawing.Size(360, 40)
 $titleLabel.Text = "Smart Office Upgrade"
 $titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 22, [System.Drawing.FontStyle]::Bold)
 $titleLabel.ForeColor = [System.Drawing.Color]::FromArgb(0, 51, 102) # StationMaster Blue
@@ -1085,7 +1118,7 @@ $headerPanel.Controls.Add($titleLabel)
 # Status Label
 $statusLabel = New-Object System.Windows.Forms.Label
 $statusLabel.Location = New-Object System.Drawing.Point(20, 120)
-$statusLabel.Size = New-Object System.Drawing.Size(760, 30)
+$statusLabel.Size = New-Object System.Drawing.Size(570, 30)
 $statusLabel.Text = "Ready to start upgrade process"
 $statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
 $statusLabel.TextAlign = "MiddleCenter"
@@ -1095,14 +1128,14 @@ $form.Controls.Add($statusLabel)
 # Progress Bar
 $progressBar = New-Object System.Windows.Forms.ProgressBar
 $progressBar.Location = New-Object System.Drawing.Point(20, 160)
-$progressBar.Size = New-Object System.Drawing.Size(760, 25)
+$progressBar.Size = New-Object System.Drawing.Size(570, 25)
 $progressBar.Style = "Continuous"
 $form.Controls.Add($progressBar)
 
 # Log TextBox
 $logTextBox = New-Object System.Windows.Forms.RichTextBox
 $logTextBox.Location = New-Object System.Drawing.Point(20, 200)
-$logTextBox.Size = New-Object System.Drawing.Size(760, 220)
+$logTextBox.Size = New-Object System.Drawing.Size(570, 220)
 $logTextBox.Font = New-Object System.Drawing.Font("Consolas", 9)
 $logTextBox.ReadOnly = $true
 $logTextBox.BackColor = [System.Drawing.Color]::FromArgb(31, 41, 55)  # Dark gray
@@ -1114,7 +1147,7 @@ $form.Controls.Add($logTextBox)
 $actionPanel = New-Object System.Windows.Forms.Panel
 $actionPanel.Location = New-Object System.Drawing.Point(20, 430)
 # Increased height to 120 to give more space under buttons
-$actionPanel.Size = New-Object System.Drawing.Size(760, 120)
+$actionPanel.Size = New-Object System.Drawing.Size(570, 120)
 $actionPanel.BorderStyle = "FixedSingle"
 $actionPanel.BackColor = [System.Drawing.Color]::FromArgb(0, 86, 179)  # #0056b3 - StationMaster Accent
 $form.Controls.Add($actionPanel)
