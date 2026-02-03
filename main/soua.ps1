@@ -1056,7 +1056,7 @@ function Start-UpgradeProcess {
 $form = New-Object System.Windows.Forms.Form
 $form.Text = "Smart Office Upgrade"
 # Reduced width by 25% for better compatibility with lower resolution screens
-$form.Size = New-Object System.Drawing.Size(608, 610)
+$form.Size = New-Object System.Drawing.Size(628, 610)
 $form.StartPosition = "Manual"
 $form.Location = New-Object System.Drawing.Point(10, 10)
 $form.FormBorderStyle = "FixedDialog"
