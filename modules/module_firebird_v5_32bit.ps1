@@ -10,14 +10,14 @@ $firebirdConfigContent = @"
 DataTypeCompatibility = 3.0
 #Configuration for Firebird 5 (vanilla) Classic (64 bit)
 DefaultDBCachePages =2048
-LockHashSlots = 65519  # slots
+LockHashSlots = 65519
 LockMemSize  = 30M
-ParallelWorkers = 1 # default parallel threads
-MaxParallelWorkers = 64 # parallel threads for sweep, backup, restore
+ParallelWorkers = 1
+MaxParallelWorkers = 64
 MaxStatementCacheSize=32M
 UseFileSystemCache = true
 TempCacheLimit = 256M
-InlineSortThreshold = 16384 # use REFETCH plan for big sortings
+InlineSortThreshold = 16384
 "@
 
 # Check if Firebird directory exists under 32-bit Program Files
