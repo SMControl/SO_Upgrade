@@ -14,7 +14,7 @@ TempCacheLimit = 2000M
 InlineSortThreshold = 16384
 "@
 
-if (!(Test-Path "C:\Program Files (x86)\Firebird")) { 
+if (!(Test-Path "C:\Program Files (x86)\Firebird\Firebird_4_0")) { 
     $installerPath = "$env:TEMP\Firebird-4.0.1.exe"
     write-host "Firebird is not installed" -ForegroundColor Red
     Invoke-WebRequest -Uri $installerUrl -OutFile $installerPath
