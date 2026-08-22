@@ -5,6 +5,13 @@ $installerUrl = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/main/bin
 $firebirdConfigContent = @"
 # Essential
 DataTypeCompatibility = 3.0
+# Configuration for Firebird 4 (vanilla) Classic (64 bit)
+DefaultDBCachePages =2048
+LockHashSlots = 65519
+LockMemSize  = 30M
+UseFileSystemCache = true
+TempCacheLimit = 2000M
+InlineSortThreshold = 16384
 "@
 
 if (!(Test-Path "C:\Program Files (x86)\Firebird")) { 
