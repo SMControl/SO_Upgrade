@@ -1,582 +1,1169 @@
-# soua.ps1 - Script v1.04 - PartVersion-1.04
-Write-Host "SOUpgradeAssistant.ps1 - Version 1.218" # previous working to this was 1.217
-# This script automates the upgrade process for Smart Office (SO) software.
+# ==================================================================================================
+# Script: SOUpgradeAssistant_GUI.ps1
+# Version: 3.189
+# Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
+# ==================================================================================================
 
-# Global Script Configuration
-$TOTAL_PARTS = 14
-$startTime = Get-Date
-$workingDir = "C:\winsm"
-# Stores initial running status of services/processes for later reversion (Parts 5, 6, 12, 13)
-$processStates = @{}
-$SO_SERVICE = "srvSOLiveSales"
-$SO_PROCESSES = @("Sm32Main", "Sm32")
+# Requires -RunAsAdministrator
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
 
-# Configure SSL/TLS Security Protocols and Certificate Validation Bypass
-[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12 -bor [Net.SecurityProtocolType]::Tls11 -bor [Net.SecurityProtocolType]::Tls
-[System.Net.ServicePointManager]::ServerCertificateValidationCallback = { $true }
+# ==================================================================================================
+# GLOBAL CONFIGURATION
+# ==================================================================================================
 
-# ==================================
-# Utility Functions
-# ==================================
-
-# Function to display part intro and progress
-function Start-Part {
-    param(
-        [Parameter(Mandatory = $true)][string]$Title,
-        [Parameter(Mandatory = $true)][int]$Current,
-        [Parameter(Mandatory = $true)][string]$PartVersion
-    )
-    Clear-Host
-    Write-Host "SO Upgrade Assistant - Version 1.218" -ForegroundColor Green
-    Write-Host "--------------------------------------------------------------------------------"
-    
-    $progressBarWidth = 30
-    $filled = [int]($progressBarWidth * $Current / $TOTAL_PARTS)
-    $empty = $progressBarWidth - $filled
-    $progress = "[" + ("█" * $filled) + ("_" * $empty) + "]"
-    
-    Write-Host "[Part $Current/$TOTAL_PARTS] $Title" -ForegroundColor Cyan
-    Write-Host "$progress" -ForegroundColor Cyan
-    Write-Host ""
+$Global:Config = @{
+    ScriptVersion = "3.189"
+    WorkingDir    = "C:\winsm"
+    LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
+    Services      = @{
+        LiveSales = "srvSOLiveSales"
+        Firebird  = "FirebirdServerDefaultInstance"
+    }
+    Processes     = @{
+        SmartOffice = @("Sm32Main", "Sm32")
+        Firebird    = "firebird"
+        PDTWiFi     = "PDTWiFi"
+        PDTWiFi64   = "PDTWiFi64"
+    }
+    Paths         = @{
+        StationMaster = "C:\Program Files (x86)\StationMaster"
+        Firebird      = "C:\Program Files (x86)\Firebird"
+        SetupDir      = "C:\winsm\SmartOffice_Installer"
+    }
+    URLs          = @{
+        ModuleSOGets   = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_soget.ps1"
+        ModuleFirebird = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_firebird.ps1"
+    }
+    Timeouts      = @{
+        ProcessCheckInterval = 2
+        ServiceRetryInterval = 5
+        ServiceMaxRetries    = 3
+    }
 }
 
-# Function to test for administrator privileges
+# Global variables
+$Global:TotalSteps = 14
+$Global:StartTime = Get-Date
+$Global:UpgradeInProgress = $false
+$Global:WasRunning = $false
+$Global:MonitorJob = $null
+$Global:SelectedExe = $null
+$Global:PDTWiFiStates = @{}
+$Global:UserCancelled = $false
+
+# ==================================================================================================
+# LOGGING FUNCTIONS
+# ==================================================================================================
+
+function Write-GuiLog {
+    param(
+        [string]$Message,
+        [string]$Color = "Black"
+    )
+    
+    $timestamp = Get-Date -Format "HH:mm:ss"
+    $logEntry = "[$timestamp] $Message"
+    
+    # Add to log textbox
+    $logTextBox.SelectionStart = $logTextBox.TextLength
+    $logTextBox.SelectionLength = 0
+    
+    $colorMap = @{
+        "Red"    = [System.Drawing.Color]::FromArgb(239, 68, 68)    # Bright red for errors
+        "Yellow" = [System.Drawing.Color]::FromArgb(251, 191, 36)   # Yellow for warnings
+        "White"  = [System.Drawing.Color]::White                     # White for everything else
+    }
+    
+    # Default to white if color not specified or not in map
+    $displayColor = if ($colorMap.ContainsKey($Color)) { $colorMap[$Color] } else { $colorMap["White"] }
+    $logTextBox.SelectionColor = $displayColor
+    $logTextBox.AppendText("$logEntry`r`n")
+    $logTextBox.SelectionColor = $logTextBox.ForeColor
+    $logTextBox.ScrollToCaret()
+    
+    # Also write to file
+    $logFile = Join-Path $Global:Config.LogDir ("soua_log_" + (Get-Date -Format "yyyy-MM-dd_HHmm") + ".log")
+    if (-not (Test-Path (Split-Path $logFile))) {
+        New-Item -ItemType Directory -Path (Split-Path $logFile) -Force | Out-Null
+    }
+    Add-Content -Path $logFile -Value $logEntry
+}
+
+function Update-Progress {
+    param(
+        [int]$Step,
+        [string]$Status
+    )
+    
+    $percentage = [math]::Round(($Step / $Global:TotalSteps) * 100)
+    $progressBar.Value = $percentage
+    # Removed "Step X/Y:" prefix as requested
+    $statusLabel.Text = $Status
+    
+    [System.Windows.Forms.Application]::DoEvents()
+}
+
 function Test-Admin {
     $currentUser = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
     return $currentUser.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 }
 
-# Function to stop a process by name and record its original state
-# Only outputs when a process is detected and being stopped.
-function Stop-ProcessIfRunning {
+
+
+function Show-ActionButtons {
     param(
-        [Parameter(Mandatory = $true)][string]$ProcessName
+        [string]$Message,
+        [hashtable]$Buttons  # @{ "ButtonText" = { ScriptBlock } }
     )
-    $process = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
-    $wasRunning = $false
     
-    if ($process) {
-        $wasRunning = $true
-        Write-Host "Process '$ProcessName' detected. Stopping..." -ForegroundColor Yellow
-        Stop-Process -Name $ProcessName -Force -ErrorAction SilentlyContinue
-    } 
+    # Clear existing buttons
+    $actionPanel.Controls.Clear()
     
-    $processStates[$ProcessName] = $wasRunning
-    return $wasRunning
+    # Add message label
+    $messageLabel = New-Object System.Windows.Forms.Label
+    $messageLabel.Location = New-Object System.Drawing.Point(10, 10)
+    $messageLabel.Size = New-Object System.Drawing.Size(555, 40)
+    $messageLabel.Text = $Message
+    $messageLabel.Font = New-Object System.Drawing.Font("Segoe UI", 10)
+    $messageLabel.ForeColor = [System.Drawing.Color]::White
+    $actionPanel.Controls.Add($messageLabel)
+    
+    # Add buttons
+    $buttonX = 10
+    foreach ($buttonText in $Buttons.Keys) {
+        $button = New-Object System.Windows.Forms.Button
+        $button.Location = New-Object System.Drawing.Point($buttonX, 55)
+        $button.Size = New-Object System.Drawing.Size(120, 35)
+        $button.Text = $buttonText
+        $button.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+        $button.BackColor = [System.Drawing.Color]::FromArgb(0, 123, 255)  # #007BFF
+        $button.ForeColor = [System.Drawing.Color]::White
+        $button.FlatStyle = "Flat"
+        $button.Add_Click($Buttons[$buttonText])
+        $actionPanel.Controls.Add($button)
+        $buttonX += 130
+    }
 }
 
-# Function to get latest Smart Office Setup files from website (formerly module_soget)
-function Get-SOSetup {
-    Write-Host "Checking Website for latest..." -ForegroundColor Yellow
+function Hide-ActionButtons {
+    $actionPanel.Controls.Clear()
+}
+
+# ==================================================================================================
+# CLEANUP FUNCTION
+# ==================================================================================================
+
+function Invoke-Cleanup {
+    #Write-GuiLog "Performing cleanup..." "Yellow"
+    
+    # Stop monitoring job if running
+    if ($Global:MonitorJob) {
+        Stop-Job -Job $Global:MonitorJob -ErrorAction SilentlyContinue
+        Remove-Job -Job $Global:MonitorJob -ErrorAction SilentlyContinue
+        $Global:MonitorJob = $null
+    }
+    
+    #Write-GuiLog "Cleanup complete." "Green"
+}
+
+# ==================================================================================================
+# UPGRADE PROCESS STEPS
+# ==================================================================================================
+
+function Step1-CheckAdmin {
+    Update-Progress 1 "Checking administrator rights..."
+    Write-GuiLog "[Step 1/14] Checking Administrator Rights" "Cyan"
+    
+    if (-not (Test-Admin)) {
+        Write-GuiLog "ERROR: This script must be run as Administrator!" "Red"
+        [System.Windows.Forms.MessageBox]::Show("This script requires Administrator privileges. Please run as Administrator.", "Error", 
+            [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        return $false
+    }
+    
+    Write-GuiLog "Administrator rights confirmed." "Green"
+    return $true
+}
+function Step2-DownloadSetup {
+    Update-Progress 2 "Checking for setup files..."
+    Write-GuiLog "[Step 2/14] Checking for Setup Files" "Cyan"
+    
+    # Define the URL for the SO Get module
+    $sogetScriptURL = $Global:Config.URLs.ModuleSOGets
+    
     try {
-        $exeLinks = (Invoke-WebRequest -Uri "https://www.stationmaster.com/downloads/" -ErrorAction Stop).Links | Where-Object { $_.href -match "\.exe$" } | ForEach-Object { $_.href }
-        $setupLinks = $exeLinks | Where-Object { $_ -match "^https://www\.stationmaster\.com/Download/Setup\d+\.exe$" }
-        $sortedLinks = $setupLinks | Sort-Object { [regex]::Match($_, "Setup(\d+)\.exe").Groups[1].Value -as [int] } -Descending
-        $highestTwoLinks = $sortedLinks | Select-Object -First 2
+        Write-GuiLog "Checking for newer Setup Files" "Yellow"
+        Write-GuiLog "Downloading new files. Please Wait..." "Yellow"
         
-        $downloadDirectory = "C:\winsm\SmartOffice_Installer"
-        if (-not (Test-Path $downloadDirectory)) {
-            Write-Host "Creating Folder C:\winsm\SmartOffice_Installer" -ForegroundColor Yellow
-            New-Item -ItemType Directory -Path $downloadDirectory -ErrorAction Stop | Out-Null
-        }
-        foreach ($downloadLink in $highestTwoLinks) {
-            $originalFilename = $downloadLink.Split('/')[-1]
-            $destinationPath = Join-Path -Path $downloadDirectory -ChildPath $originalFilename
-            
-            $request = [System.Net.HttpWebRequest]::Create($downloadLink)
-            $request.Method = "HEAD"
-            $request.UserAgent = "Mozilla/5.0"
+        # Switch progress bar to Marquee to show activity
+        #$progressBar.Style = "Marquee"
+        #$progressBar.MarqueeAnimationSpeed = 30
+        
+        # Run download in background job to keep UI responsive
+        $job = Start-Job -ScriptBlock {
+            param($url)
             try {
-                $response = $request.GetResponse()
-                $contentLength = $response.ContentLength
-                $response.Close()
+                # Download the module content
+                $moduleContent = Invoke-RestMethod -Uri $url -ErrorAction Stop
+                # Execute the module content
+                Invoke-Expression $moduleContent
             }
             catch {
-                continue
+                throw $_
+            }
+        } -ArgumentList $sogetScriptURL
+        
+        # Wait for job to complete while keeping UI alive and showing download progress
+        $lastSize = 0
+        $noChangeCount = 0
+        while ($job.State -eq 'Running') {
+            # Check for downloaded files
+            $setupFiles = Get-ChildItem -Path $Global:Config.Paths.SetupDir -Filter "*.exe" -ErrorAction SilentlyContinue
+            
+            if ($setupFiles) {
+                # Get the newest file (most recent download) and refresh its info
+                $currentFile = $setupFiles | Sort-Object CreationTime -Descending | Select-Object -First 1
+                # Force refresh of file info to get actual current size
+                $freshFileInfo = Get-Item $currentFile.FullName -Force
+                $currentSize = $freshFileInfo.Length
+                $sizeMB = [math]::Round($currentSize / 1MB, 1)
+                # Update status label with file size
+                $statusLabel.Text = "Downloading... $($sizeMB.ToString('0.0').PadLeft(6)) MB"
+                $statusLabel.Refresh()  # Force immediate UI update
+                
+                # Track if file size is changing
+                if ($currentSize -eq $lastSize) {
+                    $noChangeCount++
+                }
+                else {
+                    $noChangeCount = 0
+                    $lastSize = $currentSize
+                }
             }
             
-            # Compare size with existing file
-            $matchingFile = Get-ChildItem -Path $downloadDirectory -Filter $originalFilename -ErrorAction SilentlyContinue |
-            Where-Object { $_.Length -eq $contentLength }
-
-            if (-not $matchingFile) {
-                Write-Host "Downloading new version: $originalFilename" -ForegroundColor Green
-                Invoke-WebRequest -Uri $downloadLink -OutFile $destinationPath -ErrorAction Stop
-            }
+            Start-Sleep -Milliseconds 50
+            [System.Windows.Forms.Application]::DoEvents()
         }
         
-        # Delete older downloads, keeping the latest two
-        $downloadedFiles = Get-ChildItem -Path $downloadDirectory -Filter "*.exe" | Sort-Object LastWriteTime -Descending
-        if ($downloadedFiles.Count -gt 2) {
-            $filesToDelete = $downloadedFiles | Select-Object -Skip 2
-            foreach ($file in $filesToDelete) {
-                Remove-Item -Path $file.FullName -Force -ErrorAction SilentlyContinue
-            }
-        }
-    }
-    catch {
-        throw "Failed downloading setup files: $($_.Exception.Message)"
-    }
-}
-
-# Function to register scheduled task for daily setup check (formerly task_SO Setup Get.ps1)
-function Register-SOSetupTask {
-    Write-Host "Checking for scheduled task 'SO Setup Get'..." -ForegroundColor Yellow
-    $taskExists = Get-ScheduledTask -TaskName "SO Setup Get" -ErrorAction SilentlyContinue
-    if (-not $taskExists) {
-        Write-Host "Task not found. Creating a new scheduled task..." -ForegroundColor Green
-        $TaskName = "SO Setup Get"
-        $Description = "Gets the latest SO Installer, if new."
-        $action = New-ScheduledTaskAction -Execute "powershell.exe" -Argument "-ExecutionPolicy Bypass -NoProfile -NonInteractive -Command `"[Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12; iwr -Uri https://raw.githubusercontent.com/SMControl/SM_Tasks/refs/heads/main/bin/SO_Setup_Get.ps1 -UseBasicParsing | Select-Object -ExpandProperty Content | iex`""
-        $randomHour = Get-Random -Minimum 1 -Maximum 6
-        $randomMinute = Get-Random -Minimum 0 -Maximum 59
-        $randomTime = "{0:D2}:{1:D2}" -f $randomHour, $randomMinute
-        Write-Host "Scheduled time set to a random time between 01:00 and 06:00 daily: $randomTime"
-        $trigger = New-ScheduledTaskTrigger -Daily -At $randomTime
-        $settings = New-ScheduledTaskSettingsSet -Hidden:$true -ExecutionTimeLimit (New-TimeSpan -Minutes 30)
-        $PrincipalUser = "$env:USERDOMAIN\$env:USERNAME"
-        $PrincipalLogonType = "Interactive"
-        $PrincipalRunLevel = "Highest"
-        $principal = New-ScheduledTaskPrincipal -UserId $PrincipalUser -LogonType $PrincipalLogonType -RunLevel $PrincipalRunLevel
-        try {
-            Register-ScheduledTask -TaskName $TaskName -Description $Description -Action $action -Trigger $trigger -Settings $settings -Principal $principal -Force | Out-Null
-            Write-Host "Scheduled task 'SO Setup Get' registered successfully." -ForegroundColor Green
-        }
-        catch {
-            Write-Host "Error registering scheduled task: $($_.Exception.Message)" -ForegroundColor Red
-        }
-    }
-    else {
-        Write-Host "Scheduled task 'SO Setup Get' already exists. No action needed." -ForegroundColor Green
-    }
-}
-
-# ==================================
-# Pre-Script Setup
-# ==================================
-
-# Setup working directory
-if (-not (Test-Path $workingDir -PathType Container)) {
-    try {
-        New-Item -Path $workingDir -ItemType Directory -ErrorAction Stop | Out-Null
-    }
-    catch {
-        Write-Host "Error= Unable to create directory $workingDir" -ForegroundColor Red
-        exit
-    }
-}
-Set-Location -Path $workingDir
-
-# ==================================
-# Part 1 - Check for Admin Rights & Register Setup Task
-# PartVersion-1.03
-# - Use local Register-SOSetupTask instead of remote script fetch.
-#LOCK=ON
-# ==================================
-Start-Part -Title "System Pre-Checks & Setup Tool Installation" -Current 1 -PartVersion "1.03"
-
-if (-not (Test-Admin)) {
-    Write-Host "Error= Administrator rights required to run this script. Exiting." -ForegroundColor Red
-    pause
-    exit
-}
-
-Register-SOSetupTask
-
-# ==================================
-# Part 2 - SO_UC.exe // calling module_soget
-# PartVersion-1.05
-# - Re-numbered part to 2, incorporated module_soget.
-#LOCK=ON
-# ==================================
-Start-Part -Title "Checking for Setup Files (module_soget)" -Current 2 -PartVersion "1.05"
-
-try {
-    Get-SOSetup
-    Write-Host "Smart Office setup files checked/updated successfully." -ForegroundColor Green
-}
-catch {
-    Write-Host "Warning: Could not check for latest setup files online ($($_.Exception.Message)). Using existing local files." -ForegroundColor Yellow
-}
-
-# ==================================
-# Part 3 - Check for Firebird Folder
-# PartVersion-1.06
-# - Check for Firebird installation folder; stop script if missing.
-#LOCK=ON
-# ==================================
-Start-Part -Title "Checking for Firebird installation" -Current 3 -PartVersion "1.06"
-
-$firebirdPaths = @(
-    "C:\Program Files (x86)\Firebird",
-    "C:\Program Files\Firebird"
-)
-
-$firebirdFound = $false
-foreach ($path in $firebirdPaths) {
-    if (Test-Path $path) {
-        $firebirdFound = $true
-        break
-    }
-}
-
-if ($firebirdFound) {
-    Write-Host "Firebird folder found. Continuing..." -ForegroundColor Green
-}
-else {
-    Write-Host "Firebird is not installed. Please install Firebird before running this script." -ForegroundColor Red
-    exit
-}
-
-# ==================================
-# Part 4 - Stop SMUpdates if Running (Background Monitor)
-# PartVersion-1.03
-# - Removed redundant starting message.
-#LOCK=ON
-# ==================================
-Start-Part -Title "Monitoring and Stopping SMUpdates (Background)" -Current 4 -PartVersion "1.03"
-
-$monitorJob = Start-Job -ScriptBlock {
-    function Monitor-SmUpdates {
-        while ($true) {
-            $smUpdatesProcess = Get-Process -Name "SMUpdates" -ErrorAction SilentlyContinue
-            if ($smUpdatesProcess) {
-                Stop-Process -Name "SMUpdates" -Force -ErrorAction SilentlyContinue
-            }
-            Start-Sleep -Seconds 2
-        }
-    }
-    Monitor-SmUpdates
-}
-
-try {
-    # ==================================
-    # Part 5 - Manage SO Live Sales Service
-    # PartVersion-1.03
-    # - Removed "stopped successfully," "not running," and "not found" messages.
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Stopping SO Live Sales Service" -Current 5 -PartVersion "1.03"
-
-    try {
-        $service = Get-Service -Name $SO_SERVICE -ErrorAction SilentlyContinue
-        if ($service) {
-            $processStates[$SO_SERVICE] = ($service.Status -eq 'Running')
-            if ($processStates[$SO_SERVICE]) {
-                Write-Host "Service '$SO_SERVICE' is running. Stopping..." -ForegroundColor Yellow
-                Stop-Service -Name $SO_SERVICE -Force -ErrorAction Stop
-            } 
-        } 
-    }
-    catch {
-        Write-Host "Error managing service '$SO_SERVICE': $($_.Exception.Message)" -ForegroundColor Red
-    }
-
-    # ==================================
-    # Part 6 - Manage PDTWiFi Processes
-    # PartVersion-1.04
-    # - Messages handled by modified Stop-ProcessIfRunning function (only output on detected/stopping).
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Managing PDTWiFi processes" -Current 6 -PartVersion "1.04"
-
-    Stop-ProcessIfRunning -ProcessName "PDTWiFi"
-    Stop-ProcessIfRunning -ProcessName "PDTWiFi64"
-
-    # ==================================
-    # Part 7 - Make Sure SO is closed & Wait for Single Instance of Firebird.exe
-    # PartVersion-1.03
-    # - Wait for single instance of firebird and SO closed.
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Wait SO Closed & Single Firebird process..." -Current 7 -PartVersion "1.03"
-
-    # Make sure SO is closed
-    foreach ($process in $SO_PROCESSES) {
-        if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
-            Write-Host "Smart Office is open. Please close it to continue." -ForegroundColor Red
-            while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
-                Start-Sleep -Seconds 3
-            }
-            Write-Host "Smart Office is now closed." -ForegroundColor Green
-        } 
-    }
-
-    # Wait for single firebird instance
-    $setupDir = "$workingDir\SmartOffice_Installer"
-    if (-not (Test-Path $setupDir -PathType Container)) {
-        Write-Host "Error Setup directory '$setupDir' does not exist." -ForegroundColor Red
-        exit
-    }
-    function WaitForSingleFirebirdInstance {
-        $firebirdProcesses = Get-Process -Name "firebird" -ErrorAction SilentlyContinue
-        while ($firebirdProcesses.Count -gt 1) {
-            Write-Host "`rWarning= Multiple instances of 'firebird.exe' are running. Currently: $($firebirdProcesses.Count) " -ForegroundColor Yellow -NoNewline
-            Start-Sleep -Seconds 3
-            $firebirdProcesses = Get-Process -Name "firebird" -ErrorAction SilentlyContinue
-        }
-    }
-    WaitForSingleFirebirdInstance
-
-    # ==================================
-    # Part 8 - Launch Setup
-    # PartVersion-1.09
-    # - Updated column headers in the setup selection table based on user request.
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Launching SO setup..." -Current 8 -PartVersion "1.09"
-
-    $setupExes = Get-ChildItem -Path "C:\winsm\SmartOffice_Installer" -Filter "*.exe"
-    if ($setupExes.Count -eq 0) {
-        Write-Host "Error No executable (.exe) found in 'C:\winsm\SmartOffice_Installer'." -ForegroundColor Red
-        exit
-    }
-    elseif ($setupExes.Count -eq 1) {
-        $selectedExe = $setupExes[0]
-        Write-Host "Found setup $($selectedExe.Name)" -ForegroundColor Green
-    }
-    else {
-        $setupExes = $setupExes | Sort-Object { [regex]::Match($_.Name, "Setup(\d+)\.exe").Groups[1].Value -as [int] }
-        Write-Host "`nPlease select the setup to run`n" -ForegroundColor Yellow
+        # Restore status label
+        $statusLabel.Text = "Checking for setup files..."
         
-        Write-Host ("{0,-5} {1,-25} {2,-20} {3,-10}" -f "#", "Name", "Downloaded", "Version") -ForegroundColor White
-        Write-Host ("{0,-5} {1,-25} {2,-20} {3,-10}" -f "---", "-------------------------", "--------------------", "----------") -ForegroundColor Gray
+        # Restore progress bar style
+        $progressBar.Style = "Continuous"
+        $progressBar.Value = [math]::Round((2 / $Global:TotalSteps) * 100)
         
-        for ($i = 0; $i -lt $setupExes.Count; $i++) {
-            $exe = $setupExes[$i]
-            $dateModified = $exe.LastWriteTime.ToString("yyyy-MM-dd HH:mm")
-            $versionType = if ($i -eq 0) { "Current" } else { "Next" }
-            $color = if ($i -eq 0) { "Green" } else { "Yellow" }
-            
-            Write-Host ("{0,-5} {1,-25} {2,-20} {3,-10}" -f ($i + 1), $exe.Name, $dateModified, $versionType) -ForegroundColor $color
+        # Check job result
+        $results = Receive-Job -Job $job
+        if ($job.State -eq 'Failed') {
+            throw "Job failed"
         }
-        Write-Host "`nEnter the number of your selection (or press Enter to cancel):" -ForegroundColor Cyan
-        $selection = Read-Host "Selection"
-        if ([string]::IsNullOrWhiteSpace($selection)) {
-            Write-Host "Operation cancelled. Script execution stopped for this part." -ForegroundColor Red
-            return
-        }
-        if ($selection -match '^\d+$' -and $selection -ge 1 -and $selection -le $setupExes.Count) {
-            $selectedExe = $setupExes[$selection - 1]
-            Write-Host "Selected setup executable $($selectedExe.Name)" -ForegroundColor Green
+        Remove-Job -Job $job
+        
+        Write-GuiLog "module_soget.ps1 executed successfully." "Green"
+        
+        # Verify that we now have setup files
+        if (Test-Path $Global:Config.Paths.SetupDir) {
+            $setupFiles = Get-ChildItem -Path $Global:Config.Paths.SetupDir -Filter "*.exe"
+            if ($setupFiles.Count -gt 0) {
+                Write-GuiLog "Found $($setupFiles.Count) setup file(s)." "Green"
+                return $true
+            }
+            else {
+                Write-GuiLog "No setup files found after running module_soget." "Red"
+                return $false
+            }
         }
         else {
-            Write-Host "Invalid selection. Exiting." -ForegroundColor Red
-            exit
+            Write-GuiLog "Setup directory not found after running module_soget." "Red"
+            return $false
         }
     }
-
-    try {
-        Start-Process -FilePath $selectedExe.FullName -Wait
-        Write-Host "Setup executable finished." -ForegroundColor Green
-    }
     catch {
-        Write-Host "Error starting setup executable $_" -ForegroundColor Red
-        exit
+        # Restore progress bar style in case of error
+        $progressBar.Style = "Continuous"
+        Write-GuiLog "Error executing module_soget.ps1: $($_.Exception.Message)" "Red"
+        return $false
     }
+}
 
-    # ==================================
-    # Part 9 - Wait for User Confirmation
-    # PartVersion-1.03
-    # - Removed SMUpdates stopped message outside of Part 5.
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Post Upgrade Confirmation" -Current 9 -PartVersion "1.03"
+function Step3-CheckFirebird {
+    Update-Progress 3 "Checking Firebird installation..."
+    Write-GuiLog "[Step 3/14] Checking Firebird" "Cyan"
+    
+    if (Test-Path $Global:Config.Paths.Firebird) {
+        Write-GuiLog "Firebird is already installed." "Green"
+    }
+    else {
+        Write-GuiLog "Firebird is not installed. Installing..." "Yellow"
+        Write-GuiLog "This process runs in the background and may take a few minutes..." "Yellow"
+        
+        # Define the URL for the Firebird installation script
+        $firebirdInstallerURL = $Global:Config.URLs.ModuleFirebird
+        
+        try {
+            # Run installation in background job to prevent UI freeze
+            $job = Start-Job -ScriptBlock {
+                param($url)
+                try {
+                    # Download and execute the module
+                    $moduleContent = Invoke-RestMethod -Uri $url -ErrorAction Stop
+                    Invoke-Expression $moduleContent
+                }
+                catch {
+                    throw $_
+                }
+            } -ArgumentList $firebirdInstallerURL
+            
+            # Poll job status and keep UI responsive
+            while ($job.State -eq 'Running') {
+                Start-Sleep -Milliseconds 500
+                [System.Windows.Forms.Application]::DoEvents()
+            }
+            
+            $results = Receive-Job -Job $job
+            if ($job.State -eq 'Failed') {
+                throw "Job failed"
+            }
+            Remove-Job -Job $job
+            
+            Write-GuiLog "Firebird installation script executed." "Green"
+            
+            # Verify installation
+            if (Test-Path $Global:Config.Paths.Firebird) {
+                Write-GuiLog "Firebird installation verified." "Green"
+            }
+            else {
+                Write-GuiLog "Warning: Firebird directory not found after installation script." "Yellow"
+            }
+        }
+        catch {
+            Write-GuiLog "Error installing Firebird: $($_.Exception.Message)" "Red"
+            return $false
+        }
+    }
+    
+    return $true
+}
 
-    Stop-Job -Job $monitorJob
-    Remove-Job -Job $monitorJob
+function Step4-MonitorSMUpdates {
+    Update-Progress 4 "Monitoring SMUpdates..."
+    Write-GuiLog "[Step 4/14] Monitoring SMUpdates" "Cyan"
+    
+    # Start background job to monitor SMUpdates
+    $Global:MonitorJob = Start-Job -ScriptBlock {
+        param($modulePath)
+        Set-Location $modulePath
+        & ".\module_smupdates.ps1"
+    } -ArgumentList $Global:Config.Paths.StationMaster
+    
+    Write-GuiLog "SMUpdates monitoring started." "Green"
+    return $true
+}
 
-    Add-Type -AssemblyName System.Windows.Forms
-    [System.Windows.Forms.MessageBox]::Show("Please ensure the upgrade is complete and Smart Office is closed before clicking OK.", "SO Post Upgrade Confirmation", [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Information)
+function Step5-ManageLiveSales {
+    Update-Progress 5 "Managing SO Live Sales service..."
+    Write-GuiLog "[Step 5/14] Managing SO Live Sales Service" "Cyan"
+    
+    $serviceName = $Global:Config.Services.LiveSales
+    $service = Get-Service -Name $serviceName -ErrorAction SilentlyContinue
+    
+    if ($service) {
+        if ($service.Status -eq "Running") {
+            $Global:WasRunning = $true
+            Write-GuiLog "Service '$serviceName' is running. Stopping..." "Yellow"
+            Stop-Service -Name $serviceName -Force -ErrorAction SilentlyContinue
+            Write-GuiLog "Service stopped." "Green"
+        }
+        else {
+            $Global:WasRunning = $false
+            Write-GuiLog "Service '$serviceName' is not running." "Gray"
+        }
+    }
+    else {
+        Write-GuiLog "Service '$serviceName' not found." "Yellow"
+    }
+    
+    return $true
+}
 
-    # Re-check for Running SO Processes
-    foreach ($process in $SO_PROCESSES) {
+function Step6-ManagePDTWiFi {
+    Update-Progress 6 "Managing PDTWiFi processes..."
+    Write-GuiLog "[Step 6/14] Managing PDTWiFi Processes" "Cyan"
+    
+    $Global:PDTWiFiStates = @{}
+    
+    # PDTWiFi
+    $pdtWiFi = $Global:Config.Processes.PDTWiFi
+    $proc = Get-Process -Name $pdtWiFi -ErrorAction SilentlyContinue
+    if ($proc) {
+        $Global:PDTWiFiStates[$pdtWiFi] = "Running"
+        Stop-Process -Name $pdtWiFi -Force -ErrorAction SilentlyContinue
+        Write-GuiLog "$pdtWiFi stopped." "Green"
+    }
+    else {
+        $Global:PDTWiFiStates[$pdtWiFi] = "Not running"
+        Write-GuiLog "$pdtWiFi is not running." "Yellow"
+    }
+    
+    # PDTWiFi64
+    $pdtWiFi64 = $Global:Config.Processes.PDTWiFi64
+    $proc = Get-Process -Name $pdtWiFi64 -ErrorAction SilentlyContinue
+    if ($proc) {
+        $Global:PDTWiFiStates[$pdtWiFi64] = "Running"
+        Stop-Process -Name $pdtWiFi64 -Force -ErrorAction SilentlyContinue
+        Write-GuiLog "$pdtWiFi64 stopped." "Green"
+    }
+    else {
+        $Global:PDTWiFiStates[$pdtWiFi64] = "Not running"
+        Write-GuiLog "$pdtWiFi64 is not running." "Yellow"
+    }
+    
+    return $true
+}
+
+function Step7-WaitForClose {
+    Update-Progress 7 "Waiting for Smart Office to close..."
+    Write-GuiLog "[Step 7/14] Waiting for Smart Office to Close" "Cyan"
+    
+    # Check if Smart Office is running
+    $soRunning = $false
+    foreach ($process in $Global:Config.Processes.SmartOffice) {
         if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
-            Write-Host "Smart Office is still running. Please close it and press Enter to continue..." -ForegroundColor Red
-            Read-Host | Out-Null
+            $soRunning = $true
+            break
         }
     }
-    Write-Host "Smart Office processes confirmed closed." -ForegroundColor Green
-
-    # ==================================
-    # Part 10 - Set Permissions for SM Folder
-    # PartVersion-1.13
-    # - No changes to messaging.
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Setting permissions for Stationmaster folder" -Current 10 -PartVersion "1.13"
-
-    Write-Host "Executing permissions update (may take time)..." -ForegroundColor Yellow
-    try {
-        & icacls "C:\Program Files (x86)\StationMaster" /grant "*S-1-1-0:(OI)(CI)F" /T /C *>$null
-        if ($LASTEXITCODE -ne 0) { throw "icacls failed with exit code $LASTEXITCODE." }
-        Write-Host "Permissions for StationMaster folder set successfully." -ForegroundColor Green
-    }
-    catch {
-        Write-Host "Error setting permissions for SM folder: $($_.Exception.Message)" -ForegroundColor Red
-    }
-
-    # ==================================
-    # Part 11 - Set Permissions for Firebird Folder
-    # PartVersion-1.03
-    # - No changes to messaging.
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Setting permissions for Firebird folder" -Current 11 -PartVersion "1.03"
-
-    Write-Host "Executing permissions update (may take time)..." -ForegroundColor Yellow
-    try {
-        & icacls "C:\Program Files (x86)\Firebird" /grant "*S-1-1-0:(OI)(CI)F" /T /C *>$null
-        if ($LASTEXITCODE -ne 0) { throw "icacls failed with exit code $LASTEXITCODE." }
-        Write-Host "Permissions for Firebird folder set successfully." -ForegroundColor Green
-    }
-    catch {
-        Write-Host "Error setting permissions for Firebird folder: $($_.Exception.Message)" -ForegroundColor Red
-    }
-
-    # ==================================
-    # Part 12 - Revert SO Live Sales Service
-    # PartVersion-1.08
-    # - No changes to messaging (messages here are crucial for retries/manual intervention).
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Restarting SO Live Sales Service" -Current 12 -PartVersion "1.08"
-
-    if ($processStates[$SO_SERVICE]) {
-        Write-Host "Service '$SO_SERVICE' was running. Restarting..." -ForegroundColor Yellow
-        $retryCount = 0
-        $maxRetries = 3
-        $retryIntervalSeconds = 5
-
-        while ($retryCount -lt $maxRetries) {
-            Write-Host "Attempting to start service '$SO_SERVICE' (Attempt $($retryCount + 1) of $maxRetries)..." -ForegroundColor Yellow
-            Start-Service -Name $SO_SERVICE -ErrorAction SilentlyContinue
-            if ((Get-Service -Name $SO_SERVICE).Status -eq "Running") {
-                Write-Host "Service '$SO_SERVICE' is now running." -ForegroundColor Green
+    
+    if ($soRunning) {
+        Write-GuiLog "Smart Office is running. Please close it to continue." "Red"
+        
+        # Show action buttons instead of popup
+        Show-ActionButtons -Message "Smart Office is currently running. Please close it to continue." -Buttons @{
+            "Cancel" = {
+                Hide-ActionButtons
+                Write-GuiLog "User cancelled." "Yellow"
+                $Global:UserCancelled = $true
+            }
+        }
+        
+        # Wait for user to click Cancel OR for Smart Office to close
+        while ($actionPanel.Controls.Count -gt 0 -and !$Global:UserCancelled) {
+            Start-Sleep -Milliseconds 500
+            [System.Windows.Forms.Application]::DoEvents()
+            
+            # Check if Smart Office closed
+            $stillRunning = $false
+            foreach ($process in $Global:Config.Processes.SmartOffice) {
+                if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+                    $stillRunning = $true
+                    break
+                }
+            }
+            
+            if (-not $stillRunning) {
+                Hide-ActionButtons
                 break
             }
-            Start-Sleep -Seconds $retryIntervalSeconds
-            $retryCount++
         }
         
-        if ((Get-Service -Name $SO_SERVICE).Status -ne "Running") {
-            Write-Host "Failed to automatically start service '$SO_SERVICE'. Please manually start the service now." -ForegroundColor Red
-            while ((Get-Service -Name $SO_SERVICE).Status -ne "Running") {
-                Write-Host "Waiting for service to run. Checking again in 3 seconds..." -ForegroundColor Yellow
-                Start-Sleep -Seconds 3
+        if ($Global:UserCancelled) {
+            $Global:UserCancelled = $false
+            return $false
+        }
+        
+        # Double check / wait for any stragglers
+        foreach ($process in $Global:Config.Processes.SmartOffice) {
+            while (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+                Start-Sleep -Seconds $Global:Config.Timeouts.ProcessCheckInterval
+                [System.Windows.Forms.Application]::DoEvents()
             }
-            Write-Host "Service '$SO_SERVICE' is now running. Continuing..." -ForegroundColor Green
+        }
+    }
+    
+    Write-GuiLog "Smart Office is closed." "Green"
+    
+    # Wait for single Firebird instance
+    $fbProcesses = Get-Process -Name $Global:Config.Processes.Firebird -ErrorAction SilentlyContinue
+    while ($fbProcesses.Count -gt 1) {
+        Write-GuiLog "Warning: Multiple Firebird instances running ($($fbProcesses.Count)). Waiting..." "Yellow"
+        Start-Sleep -Seconds $Global:Config.Timeouts.ProcessCheckInterval
+        [System.Windows.Forms.Application]::DoEvents()
+        $fbProcesses = Get-Process -Name $Global:Config.Processes.Firebird -ErrorAction SilentlyContinue
+    }
+    
+    if ($fbProcesses.Count -eq 1) {
+        Write-GuiLog "Only one Firebird instance running." "Green"
+    }
+    
+    return $true
+}
+
+function Step8-LaunchSetup {
+    Update-Progress 8 "Launching Smart Office setup..."
+    Write-GuiLog "[Step 8/14] Launching Setup" "Cyan"
+    
+    # Validate setup directory exists
+    if (-not (Test-Path $Global:Config.Paths.SetupDir -PathType Container)) {
+        Write-GuiLog "ERROR: Setup directory does not exist: $($Global:Config.Paths.SetupDir)" "Red"
+        [System.Windows.Forms.MessageBox]::Show(
+            "Setup directory not found: $($Global:Config.Paths.SetupDir)",
+            "Error",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error)
+        return $false
+    }
+    
+    # Get setup files
+    $setupExes = Get-ChildItem -Path $Global:Config.Paths.SetupDir -Filter "*.exe" -ErrorAction SilentlyContinue
+    
+    if ($setupExes.Count -eq 0) {
+        Write-GuiLog "ERROR: No setup executable found!" "Red"
+        [System.Windows.Forms.MessageBox]::Show("No setup executable found in $($Global:Config.Paths.SetupDir)", "Error",
+            [System.Windows.Forms.MessageBoxButtons]::OK, [System.Windows.Forms.MessageBoxIcon]::Error)
+        return $false
+    }
+    elseif ($setupExes.Count -eq 1) {
+        $Global:SelectedExe = $setupExes[0]
+        Write-GuiLog "Found setup: $($Global:SelectedExe.Name)" "Green"
+    }
+    else {
+        # Multiple setups - show selection in Action Panel with colorful buttons
+        $setupExes = $setupExes | Sort-Object {
+            [regex]::Match($_.Name, "Setup(\d+)\.exe").Groups[1].Value -as [int]
+        }
+        
+        Write-GuiLog "Multiple setup files found. Please select one:" "Yellow"
+        
+        # Define colors for buttons
+        $buttonColors = @(
+            @{ BG = [System.Drawing.Color]::FromArgb(34, 197, 94); FG = [System.Drawing.Color]::White },   # Green
+            @{ BG = [System.Drawing.Color]::FromArgb(249, 115, 22); FG = [System.Drawing.Color]::White },  # Orange
+            @{ BG = [System.Drawing.Color]::FromArgb(168, 85, 247); FG = [System.Drawing.Color]::White },  # Purple
+            @{ BG = [System.Drawing.Color]::FromArgb(20, 184, 166); FG = [System.Drawing.Color]::White },  # Teal
+            @{ BG = [System.Drawing.Color]::FromArgb(239, 68, 68); FG = [System.Drawing.Color]::White },   # Red
+            @{ BG = [System.Drawing.Color]::FromArgb(59, 130, 246); FG = [System.Drawing.Color]::White }   # Blue
+        )
+        
+        # Clear action panel and add custom colored buttons
+        $actionPanel.Controls.Clear()
+        
+        # Add message label
+        $messageLabel = New-Object System.Windows.Forms.Label
+        $messageLabel.Location = New-Object System.Drawing.Point(10, 10)
+        $messageLabel.Size = New-Object System.Drawing.Size(555, 30)
+        $messageLabel.Text = "Select Smart Office version to install:"
+        $messageLabel.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
+        $messageLabel.ForeColor = [System.Drawing.Color]::White
+        $actionPanel.Controls.Add($messageLabel)
+        
+        # Calculate centering
+        $buttonWidth = 230
+        $buttonSpacing = 50
+        $totalButtonWidth = ($setupExes.Count * $buttonWidth) + (($setupExes.Count - 1) * $buttonSpacing)
+        $panelWidth = $actionPanel.Width
+        $startX = [math]::Max(10, [math]::Floor(($panelWidth - $totalButtonWidth) / 2))
+        
+        # Add buttons
+        $buttonX = $startX
+        for ($i = 0; $i -lt $setupExes.Count; $i++) {
+            $exe = $setupExes[$i]
+            $colorIndex = $i % $buttonColors.Count
+            
+            # Extract version number from filename (e.g., Setup030577.exe -> 030577)
+            $versionText = [regex]::Match($exe.Name, "Setup(\d+)").Groups[1].Value
+            if ([string]::IsNullOrEmpty($versionText)) { $versionText = $exe.Name } # Fallback
+            
+            $button = New-Object System.Windows.Forms.Button
+            $button.Location = New-Object System.Drawing.Point($buttonX, 50)
+            $button.Size = New-Object System.Drawing.Size($buttonWidth, 45)
+            $button.Text = $versionText
+            # Increased font size to 14pt (approx 1.5x of 9pt)
+            $button.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
+            $button.BackColor = $buttonColors[$colorIndex].BG
+            $button.ForeColor = $buttonColors[$colorIndex].FG
+            $button.FlatStyle = "Flat"
+            $button.Tag = $exe
+            $button.Add_Click({
+                    $Global:SelectedExe = $this.Tag
+                    Write-GuiLog "Selected: $($this.Tag.Name)" "Green"
+                    Hide-ActionButtons
+                })
+            $actionPanel.Controls.Add($button)
+            $buttonX += $buttonWidth + $buttonSpacing
+        }
+        
+        # Wait for user to select a setup
+        while ($actionPanel.Controls.Count -gt 0 -and $null -eq $Global:SelectedExe -and -not $form.IsDisposed -and -not $Global:UserCancelled) {
+            Start-Sleep -Milliseconds 100
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        
+        if ($Global:UserCancelled -or $form.IsDisposed) {
+            Write-GuiLog "Setup selection cancelled." "Yellow"
+            return $false
+        }
+        
+        if ($null -eq $Global:SelectedExe) {
+            Write-GuiLog "Setup selection cancelled." "Yellow"
+            return $false
+        }
+    }
+    
+    # Launch setup
+    try {
+        Write-GuiLog "Starting setup: $($Global:SelectedExe.Name)..." "Cyan"
+        $setupProcess = Start-Process -FilePath $Global:SelectedExe.FullName -PassThru
+
+        # Wait for setup to complete while keeping UI responsive
+        while (-not $setupProcess.HasExited) {
+            Start-Sleep -Milliseconds 500
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        
+        if ($setupProcess.ExitCode -eq 0) {
+            Write-GuiLog "Setup completed successfully." "Green"
         }
         else {
-            Write-Host "'$SO_SERVICE' service confirmed to be running." -ForegroundColor Green
+            Write-GuiLog "Setup finished with exit code: $($setupProcess.ExitCode)" "Yellow"
         }
     }
-    else {
-        Write-Host "Service '$SO_SERVICE' was not running before, no action taken." -ForegroundColor Yellow
+    catch {
+        Write-GuiLog "Error launching setup: $($_.Exception.Message)" "Red"
+        return $false
     }
+    
+    return $true
+}
 
-    # ==================================
-    # Part 13 - Revert PDTWiFi Processes
-    # PartVersion-1.03
-    # - No changes to messaging.
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Reverting PDTWiFi processes" -Current 13 -PartVersion "1.03"
+function Step9-PostUpgrade {
+    Update-Progress 9 "Post-upgrade tasks..."
+    Write-GuiLog "[Step 9/14] Post Upgrade" "Cyan"
+    
+    # Stop monitoring job
+    if ($Global:MonitorJob) {
+        Stop-Job -Job $Global:MonitorJob -ErrorAction SilentlyContinue
+        Remove-Job -Job $Global:MonitorJob -ErrorAction SilentlyContinue
+        $Global:MonitorJob = $null
+        Write-GuiLog "SMUpdates monitoring stopped." "Green"
+    }
+    
+    $smartOfficeHasRun = $false
+    $script:continueClicked = $false
+    $lastState = "" # To avoid flickering
+    
+    while (-not $script:continueClicked) {
+        # Check if SmartOffice is running
+        $soRunning = $false
+        foreach ($process in $Global:Config.Processes.SmartOffice) {
+            if (Get-Process -Name $process -ErrorAction SilentlyContinue) {
+                $soRunning = $true
+                $smartOfficeHasRun = $true
+                break
+            }
+        }
+        
+        # Determine current state
+        if ($soRunning) {
+            # [B] SmartOffice is running
+            $currentState = "B"
+        }
+        elseif (-not $smartOfficeHasRun) {
+            # [A] Waiting for Setup/Initial (SO hasn't run yet)
+            $currentState = "A"
+        }
+        else {
+            # [C] SO was running and is now closed
+            $currentState = "C"
+        }
+        
+        # Update UI if state changed
+        if ($currentState -ne $lastState) {
+            $lastState = $currentState
+            
+            switch ($currentState) {
+                "A" {
+                    Show-ActionButtons -Message "Finish Setup and Open SmartOffice" -Buttons @{}
+                }
+                "B" {
+                    Show-ActionButtons -Message "Waiting for SmartOffice to be closed." -Buttons @{}
+                }
+                "C" {
+                    Show-ActionButtons -Message "Continue when SmartOffice is closed." -Buttons @{
+                        "Continue" = {
+                            $script:continueClicked = $true
+                            Hide-ActionButtons
+                        }
+                    }
+                }
+            }
+        }
+        
+        Start-Sleep -Milliseconds 500
+        [System.Windows.Forms.Application]::DoEvents()
+        
+        if ($Global:UserCancelled -or $form.IsDisposed) {
+            return $false
+        }
+    }
+    
+    Write-GuiLog "Smart Office confirmed closed." "Green"
+    return $true
+}
 
-    $PDTWiFi_PATH = "C:\Program Files (x86)\StationMaster"
+function Step10-SetPermissionsSM {
+    Update-Progress 10 "Setting StationMaster permissions..."
+    Write-GuiLog "[Step 10/14] Setting StationMaster Permissions" "Cyan"
+    Write-GuiLog "This may take 1-30+ minutes. Please wait..." "Yellow"
+    
+    try {
+        # Run icacls in background job to prevent UI freeze
+        $job = Start-Job -ScriptBlock {
+            param($path)
+            & icacls $path /grant "*S-1-1-0:(OI)(CI)F" /T /C 2>&1
+        } -ArgumentList $Global:Config.Paths.StationMaster
+        
+        # Poll job status and keep UI responsive
+        while ($job.State -eq 'Running') {
+            Start-Sleep -Milliseconds 500
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        
+        Receive-Job -Job $job | Out-Null
+        Remove-Job -Job $job
+        
+        Write-GuiLog "Permissions set successfully." "Green"
+    }
+    catch {
+        Write-GuiLog "Error setting permissions: $($_.Exception.Message)" "Red"
+    }
+    
+    return $true
+}
 
-    if ($processStates["PDTWiFi"]) {
+function Step11-SetPermissionsFB {
+    Update-Progress 11 "Setting Firebird permissions..."
+    Write-GuiLog "[Step 11/14] Setting Firebird Permissions" "Cyan"
+    
+    try {
+        # Run icacls in background job to prevent UI freeze
+        $job = Start-Job -ScriptBlock {
+            param($path)
+            & icacls $path /grant "*S-1-1-0:(OI)(CI)F" /T /C 2>&1
+        } -ArgumentList $Global:Config.Paths.Firebird
+        
+        # Poll job status and keep UI responsive
+        while ($job.State -eq 'Running') {
+            Start-Sleep -Milliseconds 500
+            [System.Windows.Forms.Application]::DoEvents()
+        }
+        
+        Receive-Job -Job $job | Out-Null
+        Remove-Job -Job $job
+        
+        Write-GuiLog "Permissions set successfully." "Green"
+    }
+    catch {
+        Write-GuiLog "Error setting permissions: $($_.Exception.Message)" "Red"
+    }
+    
+    return $true
+}
+
+function Step12-RevertLiveSales {
+    Update-Progress 12 "Reverting SO Live Sales service..."
+    Write-GuiLog "[Step 12/14] Reverting SO Live Sales Service" "Cyan"
+    
+    if ($Global:WasRunning) {
+        $serviceName = $Global:Config.Services.LiveSales
+        Write-GuiLog "Service was running before. Restarting..." "Yellow"
+        
         try {
-            Start-Process "$PDTWiFi_PATH\PDTWiFi.exe" -ErrorAction Stop
-            Write-Host "PDTWiFi started." -ForegroundColor Green
+            $retryCount = 0
+            $maxRetries = $Global:Config.Timeouts.ServiceMaxRetries
+            $retryIntervalSeconds = $Global:Config.Timeouts.ServiceRetryInterval
+            
+            while ($retryCount -lt $maxRetries) {
+                Write-GuiLog "Attempting to start service '$serviceName' (Attempt $($retryCount + 1) of $maxRetries)..." "Yellow"
+                Start-Service -Name $serviceName -ErrorAction SilentlyContinue
+                
+                if ((Get-Service -Name $serviceName).Status -eq "Running") {
+                    Write-GuiLog "Service '$serviceName' is now running." "Green"
+                    break
+                }
+                else {
+                    Write-GuiLog "Service '$serviceName' is not running. Waiting $retryIntervalSeconds seconds before retrying..." "Yellow"
+                    Start-Sleep -Seconds $retryIntervalSeconds
+                    [System.Windows.Forms.Application]::DoEvents()
+                    $retryCount++
+                }
+            }
+            
+            # If still not running, ask user to start manually
+            if ((Get-Service -Name $serviceName).Status -ne "Running") {
+                Write-GuiLog "Failed to automatically start service '$serviceName' after $maxRetries attempts." "Red"
+                
+                Show-ActionButtons -Message "The service '$serviceName' could not be started automatically. Please start it manually." -Buttons @{
+                    "Continue" = {
+                        Hide-ActionButtons
+                    }
+                    "Cancel"   = {
+                        Hide-ActionButtons
+                        $Global:UserCancelled = $true
+                    }
+                }
+                
+                # Wait for user to click a button
+                while ($actionPanel.Controls.Count -gt 0 -and !$Global:UserCancelled) {
+                    Start-Sleep -Milliseconds 100
+                    [System.Windows.Forms.Application]::DoEvents()
+                }
+                
+                if ($Global:UserCancelled) {
+                    $Global:UserCancelled = $false
+                    Write-GuiLog "User cancelled manual service start." "Yellow"
+                    return $false
+                }
+                
+                # Wait for service to be running
+                while ((Get-Service -Name $serviceName).Status -ne "Running") {
+                    Write-GuiLog "Waiting for '$serviceName' service to be running..." "Yellow"
+                    Start-Sleep -Seconds $Global:Config.Timeouts.ProcessCheckInterval
+                    [System.Windows.Forms.Application]::DoEvents()
+                }
+                Write-GuiLog "Service '$serviceName' is now running. Continuing..." "Green"
+            }
         }
         catch {
-            Write-Host "Error starting PDTWiFi $($_.Exception.Message)" -ForegroundColor Red
+            Write-GuiLog "Error starting service: $($_.Exception.Message)" "Red"
         }
     }
     else {
-        Write-Host "PDTWiFi was not running, no action taken." -ForegroundColor Yellow
+        Write-GuiLog "Service was not running before. No action needed." "Yellow"
     }
+    
+    return $true
+}
 
-    if ($processStates["PDTWiFi64"]) {
+function Step13-RevertPDTWiFi {
+    Update-Progress 13 "Reverting PDTWiFi processes..."
+    Write-GuiLog "[Step 13/14] Reverting PDTWiFi Processes" "Cyan"
+    
+    # PDTWiFi
+    $pdtWiFi = $Global:Config.Processes.PDTWiFi
+    if ($Global:PDTWiFiStates[$pdtWiFi] -eq "Running") {
         try {
-            Start-Process "$PDTWiFi_PATH\PDTWiFi64.exe" -ErrorAction Stop
-            Write-Host "PDTWiFi64 started." -ForegroundColor Green
+            Start-Process (Join-Path $Global:Config.Paths.StationMaster "PDTWiFi.exe") -ErrorAction Stop
+            Write-GuiLog "$pdtWiFi started." "Green"
         }
         catch {
-            Write-Host "Error starting PDTWiFi64 $($_.Exception.Message)" -ForegroundColor Red
+            Write-GuiLog "Error starting $pdtWiFi : $($_.Exception.Message)" "Red"
         }
     }
     else {
-        Write-Host "PDTWiFi64 was not running, no action taken." -ForegroundColor Yellow
+        Write-GuiLog "$pdtWiFi was not running. No action taken." "Yellow"
     }
-
-    # ==================================
-    # Part 14 - Clean up and Finish Script
-    # PartVersion-1.12
-    # - Re-numbered part to 14.
-    #LOCK=ON
-    # ==================================
-    Start-Part -Title "Clean up and finish" -Current 14 -PartVersion "1.12"
-
-    # Get Current Status of services and processes
-    $liveSalesService = Get-Service -Name $SO_SERVICE -ErrorAction SilentlyContinue
-    $liveSalesServiceStatus = if ($liveSalesService) { $liveSalesService.Status } else { "Not Installed" }
-    $pdtWifiStatus = if (Get-Process -Name "PDTWiFi" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
-    $pdtWifi64Status = if (Get-Process -Name "PDTWiFi64" -ErrorAction SilentlyContinue) { "Running" } else { "Stopped" }
-
-    # Function to determine status color
-    function Get-StatusColor ($status) {
-        if ($status -eq "Running") { return "Green" }
-        if ($status -eq "Not Installed") { return "Gray" }
-        return "Yellow"
+    
+    # PDTWiFi64
+    $pdtWiFi64 = $Global:Config.Processes.PDTWiFi64
+    if ($Global:PDTWiFiStates[$pdtWiFi64] -eq "Running") {
+        try {
+            Start-Process (Join-Path $Global:Config.Paths.StationMaster "PDTWiFi64.exe") -ErrorAction Stop
+            Write-GuiLog "$pdtWiFi64 started." "Green"
+        }
+        catch {
+            Write-GuiLog "Error starting $pdtWiFi64 : $($_.Exception.Message)" "Red"
+        }
     }
+    else {
+        Write-GuiLog "$pdtWiFi64 was not running. No action taken." "Yellow"
+    }
+    
+    return $true
+}
 
-    Write-Host " "
-    Write-Host "Process Status:" -ForegroundColor Yellow
-    Write-Host "------------------------------------------------" -ForegroundColor Yellow
-    Write-Host ("{0,-25} {1,-15}" -f "Item", "Current Status") -ForegroundColor White
-    Write-Host ("{0,-25} {1,-15}" -f "-------------------------", "---------------") -ForegroundColor Gray
-
-    Write-Host ("{0,-25} {1,-15}" -f "SO Live Sales Service", $liveSalesServiceStatus) -ForegroundColor (Get-StatusColor $liveSalesServiceStatus)
-    Write-Host ("{0,-25} {1,-15}" -f "PDTWiFi.exe", $pdtWifiStatus) -ForegroundColor (Get-StatusColor $pdtWifiStatus)
-    Write-Host ("{0,-25} {1,-15}" -f "PDTWiFi64.exe", $pdtWifi64Status) -ForegroundColor (Get-StatusColor $pdtWifi64Status)
-
-    Write-Host "------------------------------------------------" -ForegroundColor Yellow
-
-    # Calculate and display script execution time
+function Step14-Finish {
+    Update-Progress 14 "Finalizing..."
+    Write-GuiLog "[Step 14/14] Finishing Up" "Cyan"
+    # Calculate execution time
     $endTime = Get-Date
-    $executionTime = $endTime - $startTime
+    $executionTime = $endTime - $Global:StartTime
     $totalMinutes = [math]::Floor($executionTime.TotalMinutes)
     $totalSeconds = $executionTime.Seconds
-
-    Write-Host " "
-    Write-Host "Completed in $($totalMinutes)m $($totalSeconds)s." -ForegroundColor Green
-    Write-Host "Consider if you need to Reboot at this stage." -ForegroundColor Yellow
-    Write-Host "Press Enter to start Smart Office, '9' to reboot now, or any other key to exit."
-    $key = $Host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
-
-    if ($key.VirtualKeyCode -eq 13) {
-        Write-Host "Starting Smart Office..." -ForegroundColor Cyan
-        try {
-            Start-Process "C:\Program Files (x86)\StationMaster\Sm32.exe" -ErrorAction Stop
-            Write-Host "Smart Office started successfully." -ForegroundColor Green
-        }
-        catch {
-            Write-Host "Error starting Smart Office: $($_.Exception.Message)" -ForegroundColor Red
-        }
-    }
-    elseif ($key.VirtualKeyCode -eq 57) {
-        Write-Host "Rebooting..." -ForegroundColor Cyan
-        Restart-Computer -Force
+    
+    # Add spacing to push content down in the log
+    Write-GuiLog "" "White"
+    Write-GuiLog "" "White"
+    Write-GuiLog "" "White"
+    Write-GuiLog "" "White"
+    Write-GuiLog "" "White"
+    
+    # Display completion banner
+    Write-GuiLog "========================================" "Green"
+    Write-GuiLog "       UPGRADE COMPLETE!                " "Green"
+    Write-GuiLog "========================================" "Green"
+    Write-GuiLog "" "White"
+    Write-GuiLog "Completed in $($totalMinutes)m $($totalSeconds)s." "Green"
+    Write-GuiLog "" "White"
+    
+    # Display status table
+    Write-GuiLog "Current System Status:" "White"
+    Write-GuiLog "----------------------------------------" "White"
+    
+    # Check LiveSales service
+    $liveSalesService = Get-Service -Name $Global:Config.Services.LiveSales -ErrorAction SilentlyContinue
+    if ($liveSalesService -and $liveSalesService.Status -eq "Running") {
+        Write-GuiLog "  SO Live Sales Service:  Running" "Green"
     }
     else {
-        Write-Host "Exiting..." -ForegroundColor Cyan
+        Write-GuiLog "  SO Live Sales Service:  Not Running" "Yellow"
     }
-}
-finally {
-    if ($monitorJob) {
-        Stop-Job -Job $monitorJob -ErrorAction SilentlyContinue | Out-Null
-        Remove-Job -Job $monitorJob -ErrorAction SilentlyContinue | Out-Null
+    
+    # Check PDTWiFi
+    $pdtWiFiProc = Get-Process -Name $Global:Config.Processes.PDTWiFi -ErrorAction SilentlyContinue
+    if ($pdtWiFiProc) {
+        Write-GuiLog "  PDTWiFi:                Running" "Green"
     }
+    else {
+        Write-GuiLog "  PDTWiFi:                Not Running" "Yellow"
+    }
+    
+    # Check PDTWiFi64
+    $pdtWiFi64Proc = Get-Process -Name $Global:Config.Processes.PDTWiFi64 -ErrorAction SilentlyContinue
+    if ($pdtWiFi64Proc) {
+        Write-GuiLog "  PDTWiFi64:              Running" "Green"
+    }
+    else {
+        Write-GuiLog "  PDTWiFi64:              Not Running" "Yellow"
+    }
+    
+    Write-GuiLog "----------------------------------------" "White"
+    Write-GuiLog "" "White"    
+    # Show completion options
+    # Show completion options with custom buttons
+    $actionPanel.Controls.Clear()
+    
+    # Message
+    $messageLabel = New-Object System.Windows.Forms.Label
+    $messageLabel.Location = New-Object System.Drawing.Point(10, 10)
+    $messageLabel.Size = New-Object System.Drawing.Size(555, 30)
+    $messageLabel.Text = "Upgrade completed. Consider Rebooting."
+    $messageLabel.Font = New-Object System.Drawing.Font("Segoe UI", 11, [System.Drawing.FontStyle]::Bold)
+    $messageLabel.ForeColor = [System.Drawing.Color]::White
+    $actionPanel.Controls.Add($messageLabel)
+    
+    # Button 1: Start Smart Office (Blue)
+    $btnStart = New-Object System.Windows.Forms.Button
+    $btnStart.Location = New-Object System.Drawing.Point(10, 50)
+    $btnStart.Size = New-Object System.Drawing.Size(160, 40)
+    $btnStart.Text = "Start Smart Office"
+    $btnStart.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $btnStart.BackColor = [System.Drawing.Color]::FromArgb(0, 123, 255) # Blue
+    $btnStart.ForeColor = [System.Drawing.Color]::White
+    $btnStart.FlatStyle = "Flat"
+    $btnStart.Add_Click({
+            Hide-ActionButtons
+            try {
+                Start-Process (Join-Path $Global:Config.Paths.StationMaster "Sm32.exe") -ErrorAction Stop
+                Write-GuiLog "Smart Office started." "Green"
+                $form.Close()
+            }
+            catch {
+                Write-GuiLog "Error starting Smart Office: $($_.Exception.Message)" "Red"
+            }
+        })
+    $actionPanel.Controls.Add($btnStart)
+    
+    # Button 2: Reboot (Red)
+    $btnReboot = New-Object System.Windows.Forms.Button
+    $btnReboot.Location = New-Object System.Drawing.Point(180, 50)
+    $btnReboot.Size = New-Object System.Drawing.Size(120, 40)
+    $btnReboot.Text = "Reboot PC"
+    $btnReboot.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $btnReboot.BackColor = [System.Drawing.Color]::FromArgb(220, 53, 69) # Red
+    $btnReboot.ForeColor = [System.Drawing.Color]::White
+    $btnReboot.FlatStyle = "Flat"
+    $btnReboot.Add_Click({
+            $result = [System.Windows.Forms.MessageBox]::Show("Are you sure you want to reboot the computer now?", "Confirm Reboot", [System.Windows.Forms.MessageBoxButtons]::YesNo, [System.Windows.Forms.MessageBoxIcon]::Warning)
+            if ($result -eq [System.Windows.Forms.DialogResult]::Yes) {
+                Hide-ActionButtons
+                Write-GuiLog "Rebooting system..." "Red"
+                $form.Close()
+                Restart-Computer -Force
+            }
+        })
+    $actionPanel.Controls.Add($btnReboot)
+    
+    # Button 3: Close (Gray)
+    $btnClose = New-Object System.Windows.Forms.Button
+    $btnClose.Location = New-Object System.Drawing.Point(310, 50)
+    $btnClose.Size = New-Object System.Drawing.Size(100, 40)
+    $btnClose.Text = "Close"
+    $btnClose.Font = New-Object System.Drawing.Font("Segoe UI", 9, [System.Drawing.FontStyle]::Bold)
+    $btnClose.BackColor = [System.Drawing.Color]::FromArgb(108, 117, 125) # Gray
+    $btnClose.ForeColor = [System.Drawing.Color]::White
+    $btnClose.FlatStyle = "Flat"
+    $btnClose.Add_Click({
+            Hide-ActionButtons
+            $form.Close()
+        })
+    $actionPanel.Controls.Add($btnClose)
 }
+
+# ==================================================================================================
+# MAIN UPGRADE PROCESS
+# ==================================================================================================
+
+function Start-UpgradeProcess {
+    $Global:UpgradeInProgress = $true
+    $Global:StartTime = Get-Date
+    
+    $steps = @(
+        { Step1-CheckAdmin },
+        { Step2-DownloadSetup },
+        { Step3-CheckFirebird },
+        { Step4-MonitorSMUpdates },
+        { Step5-ManageLiveSales },
+        { Step6-ManagePDTWiFi },
+        { Step7-WaitForClose },
+        { Step8-LaunchSetup },
+        { Step9-PostUpgrade },
+        { Step10-SetPermissionsSM },
+        { Step11-SetPermissionsFB },
+        { Step12-RevertLiveSales },
+        { Step13-RevertPDTWiFi },
+        { Step14-Finish }
+    )
+    
+    foreach ($step in $steps) {
+        $result = & $step
+        if (-not $result) {
+            Write-GuiLog "Upgrade process stopped." "Red"
+            $Global:UpgradeInProgress = $false
+            Invoke-Cleanup
+            return
+        }
+    }
+    
+    $Global:UpgradeInProgress = $false
+}
+
+# ==================================================================================================
+# GUI CREATION
+# ==================================================================================================
+
+# Create main form
+$form = New-Object System.Windows.Forms.Form
+$form.Text = "Smart Office Upgrade"
+# Reduced width by 25% for better compatibility with lower resolution screens
+$form.Size = New-Object System.Drawing.Size(618, 610)
+$form.StartPosition = "Manual"
+$form.Location = New-Object System.Drawing.Point(10, 10)
+$form.FormBorderStyle = "FixedDialog"
+$form.MaximizeBox = $false
+$form.MinimizeBox = $false
+$form.BackColor = [System.Drawing.Color]::FromArgb(0, 51, 102)  # #003366 - StationMaster Primary
+
+# Add form closing event for cleanup
+$form.Add_FormClosing({
+        param($sender, $e)
+    
+        # If upgrade is in progress, confirm cancellation
+        if ($Global:UpgradeInProgress) {
+            $result = [System.Windows.Forms.MessageBox]::Show(
+                "Upgrade is in progress. Are you sure you want to cancel?",
+                "Confirm Cancel",
+                [System.Windows.Forms.MessageBoxButtons]::YesNo,
+                [System.Windows.Forms.MessageBoxIcon]::Warning)
+        
+            if ($result -eq [System.Windows.Forms.DialogResult]::No) {
+                $e.Cancel = $true
+                return
+            }
+            
+            # User confirmed cancel
+            $Global:UserCancelled = $true
+        }
+    
+        # Cleanup
+        Invoke-Cleanup
+    })
+
+
+
+# Header Panel (White background for Logo and Title)
+$headerPanel = New-Object System.Windows.Forms.Panel
+$headerPanel.Dock = "Top"
+$headerPanel.Height = 100
+$headerPanel.BackColor = [System.Drawing.Color]::White
+$form.Controls.Add($headerPanel)
+
+# Logo (Inside Header)
+$logoBox = New-Object System.Windows.Forms.PictureBox
+$logoBox.Location = New-Object System.Drawing.Point(20, 12)
+$logoBox.Size = New-Object System.Drawing.Size(180, 75)
+$logoBox.SizeMode = "Zoom"
+$logoBox.ImageLocation = "https://stationmaster.info/logo-station-master.png"
+$headerPanel.Controls.Add($logoBox)
+
+# Title Label (Inside Header)
+$titleLabel = New-Object System.Windows.Forms.Label
+$titleLabel.Location = New-Object System.Drawing.Point(220, 30)
+$titleLabel.Size = New-Object System.Drawing.Size(360, 40)
+$titleLabel.Text = "Smart Office Upgrade"
+$titleLabel.Font = New-Object System.Drawing.Font("Segoe UI", 22, [System.Drawing.FontStyle]::Bold)
+$titleLabel.ForeColor = [System.Drawing.Color]::FromArgb(0, 51, 102) # StationMaster Blue
+$headerPanel.Controls.Add($titleLabel)
+
+# Status Label
+$statusLabel = New-Object System.Windows.Forms.Label
+$statusLabel.Location = New-Object System.Drawing.Point(20, 120)
+$statusLabel.Size = New-Object System.Drawing.Size(570, 30)
+$statusLabel.Text = "Ready to start upgrade process"
+$statusLabel.Font = New-Object System.Drawing.Font("Segoe UI", 14, [System.Drawing.FontStyle]::Bold)
+$statusLabel.TextAlign = "MiddleCenter"
+$statusLabel.ForeColor = [System.Drawing.Color]::FromArgb(191, 219, 254)  # Light blue
+$form.Controls.Add($statusLabel)
+
+# Progress Bar
+$progressBar = New-Object System.Windows.Forms.ProgressBar
+$progressBar.Location = New-Object System.Drawing.Point(20, 160)
+$progressBar.Size = New-Object System.Drawing.Size(570, 25)
+$progressBar.Style = "Continuous"
+$form.Controls.Add($progressBar)
+
+# Log TextBox
+$logTextBox = New-Object System.Windows.Forms.RichTextBox
+$logTextBox.Location = New-Object System.Drawing.Point(20, 200)
+$logTextBox.Size = New-Object System.Drawing.Size(570, 220)
+$logTextBox.Font = New-Object System.Drawing.Font("Consolas", 9)
+$logTextBox.ReadOnly = $true
+$logTextBox.BackColor = [System.Drawing.Color]::FromArgb(31, 41, 55)  # Dark gray
+$logTextBox.ForeColor = [System.Drawing.Color]::FromArgb(229, 231, 235)  # Light gray text
+$logTextBox.BorderStyle = "FixedSingle"
+$form.Controls.Add($logTextBox)
+
+# Action Panel
+$actionPanel = New-Object System.Windows.Forms.Panel
+$actionPanel.Location = New-Object System.Drawing.Point(20, 430)
+# Increased height to 120 to give more space under buttons
+$actionPanel.Size = New-Object System.Drawing.Size(570, 120)
+$actionPanel.BorderStyle = "FixedSingle"
+$actionPanel.BackColor = [System.Drawing.Color]::FromArgb(0, 86, 179)  # #0056b3 - StationMaster Accent
+$form.Controls.Add($actionPanel)
+
+# Display initial version in log
+Write-GuiLog "souaGUI.ps1 - Version $($Global:Config.ScriptVersion)" "Cyan"
+Write-GuiLog "Starting upgrade process..." "Gray"
+Write-GuiLog ""
+
+# Show form
+$form.Add_Shown({
+        # Auto-start upgrade when form is shown
+        Start-UpgradeProcess
+    })
+
+[void]$form.ShowDialog()
+
+# Cleanup on exit
+$form.Dispose()
