@@ -1,6 +1,6 @@
 # ==================================================================================================
 # Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.189
+# Version: 3.190
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
 # ==================================================================================================
 
@@ -13,7 +13,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.189"
+    ScriptVersion = "3.190"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -33,7 +33,6 @@ $Global:Config = @{
     }
     URLs          = @{
         ModuleSOGets   = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_soget.ps1"
-        ModuleFirebird = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_firebird.ps1"
     }
     Timeouts      = @{
         ProcessCheckInterval = 2
@@ -291,59 +290,33 @@ function Step3-CheckFirebird {
     Update-Progress 3 "Checking Firebird installation..."
     Write-GuiLog "[Step 3/14] Checking Firebird" "Cyan"
     
-    if (Test-Path $Global:Config.Paths.Firebird) {
-        Write-GuiLog "Firebird is already installed." "Green"
-    }
-    else {
-        Write-GuiLog "Firebird is not installed. Installing..." "Yellow"
-        Write-GuiLog "This process runs in the background and may take a few minutes..." "Yellow"
-        
-        # Define the URL for the Firebird installation script
-        $firebirdInstallerURL = $Global:Config.URLs.ModuleFirebird
-        
-        try {
-            # Run installation in background job to prevent UI freeze
-            $job = Start-Job -ScriptBlock {
-                param($url)
-                try {
-                    # Download and execute the module
-                    $moduleContent = Invoke-RestMethod -Uri $url -ErrorAction Stop
-                    Invoke-Expression $moduleContent
-                }
-                catch {
-                    throw $_
-                }
-            } -ArgumentList $firebirdInstallerURL
-            
-            # Poll job status and keep UI responsive
-            while ($job.State -eq 'Running') {
-                Start-Sleep -Milliseconds 500
-                [System.Windows.Forms.Application]::DoEvents()
-            }
-            
-            $results = Receive-Job -Job $job
-            if ($job.State -eq 'Failed') {
-                throw "Job failed"
-            }
-            Remove-Job -Job $job
-            
-            Write-GuiLog "Firebird installation script executed." "Green"
-            
-            # Verify installation
-            if (Test-Path $Global:Config.Paths.Firebird) {
-                Write-GuiLog "Firebird installation verified." "Green"
-            }
-            else {
-                Write-GuiLog "Warning: Firebird directory not found after installation script." "Yellow"
-            }
-        }
-        catch {
-            Write-GuiLog "Error installing Firebird: $($_.Exception.Message)" "Red"
-            return $false
+    $firebirdPaths = @(
+        "C:\Program Files (x86)\Firebird",
+        "C:\Program Files\Firebird"
+    )
+    
+    $firebirdFound = $false
+    foreach ($path in $firebirdPaths) {
+        if (Test-Path $path) {
+            $firebirdFound = $true
+            break
         }
     }
     
-    return $true
+    if ($firebirdFound) {
+        Write-GuiLog "Firebird folder found. Continuing..." "Green"
+        return $true
+    }
+    else {
+        Write-GuiLog "Firebird is not installed. Please install Firebird before running this script." "Red"
+        [System.Windows.Forms.MessageBox]::Show(
+            "Firebird is not installed. Please install Firebird before running this upgrade.",
+            "Firebird Not Found",
+            [System.Windows.Forms.MessageBoxButtons]::OK,
+            [System.Windows.Forms.MessageBoxIcon]::Error
+        ) | Out-Null
+        return $false
+    }
 }
 
 function Step4-MonitorSMUpdates {
