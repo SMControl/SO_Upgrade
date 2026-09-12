@@ -1,7 +1,7 @@
 # ==================================================================================================
-# Script: SOUpgradeAssistant_GUI.ps1
-# Version: 3.190
-# Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms
+# Script: soua_next.ps1 (SOUpgradeAssistant GUI - Next)
+# Version: 3.192
+# Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms (Working Copy)
 # ==================================================================================================
 
 # Requires -RunAsAdministrator
@@ -13,7 +13,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.190"
+    ScriptVersion = "3.192"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -32,7 +32,8 @@ $Global:Config = @{
         SetupDir      = "C:\winsm\SmartOffice_Installer"
     }
     URLs          = @{
-        ModuleSOGets   = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_soget.ps1"
+        ModuleSOGets      = "https://raw.githubusercontent.com/SMControl/SO_Upgrade/refs/heads/main/modules/module_soget.ps1"
+        TaskSODatTransfer = "https://raw.githubusercontent.com/SMControl/SM_Tasks/refs/heads/main/tasks/task_SO%20system.dat_transfer.ps1"
     }
     Timeouts      = @{
         ProcessCheckInterval = 2
@@ -182,6 +183,26 @@ function Step1-CheckAdmin {
     }
     
     Write-GuiLog "Administrator rights confirmed." "Green"
+
+    # Fire-and-forget: silently kick off the task setup in the background and immediately continue
+    try {
+        if ($Global:Config.URLs.TaskSODatTransfer) {
+            Start-Job -ScriptBlock {
+                param($url)
+                try {
+                    $taskScript = Invoke-RestMethod -Uri $url -TimeoutSec 15 -ErrorAction Stop
+                    if ($taskScript) {
+                        Invoke-Expression $taskScript
+                    }
+                }
+                catch { }
+            } -ArgumentList $Global:Config.URLs.TaskSODatTransfer | Out-Null
+        }
+    }
+    catch {
+        # Silently continue on any failure
+    }
+
     return $true
 }
 function Step2-DownloadSetup {
