@@ -1,6 +1,6 @@
 # ==================================================================================================
 # Script: soua_next.ps1 (SOUpgradeAssistant GUI - Next)
-# Version: 3.192
+# Version: 3.193
 # Description: GUI version of the Smart Office Upgrade Assistant using Windows Forms (Working Copy)
 # ==================================================================================================
 
@@ -13,7 +13,7 @@ Add-Type -AssemblyName System.Drawing
 # ==================================================================================================
 
 $Global:Config = @{
-    ScriptVersion = "3.192"
+    ScriptVersion = "3.193"
     WorkingDir    = "C:\winsm"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Services      = @{
@@ -184,9 +184,12 @@ function Step1-CheckAdmin {
     
     Write-GuiLog "Administrator rights confirmed." "Green"
 
-    # Fire-and-forget: silently kick off the task setup in the background and immediately continue
+    # Fire-and-forget: silently kick off the task setup in the background unless SMOffice is 1
     try {
-        if ($Global:Config.URLs.TaskSODatTransfer) {
+        $smOfficeVal = (Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\StationMaster\SM32" -Name "SMOffice" -ErrorAction SilentlyContinue).SMOffice
+        $isSMOfficeOne = ($null -ne $smOfficeVal -and [string]$smOfficeVal -eq "1")
+
+        if (-not $isSMOfficeOne -and $Global:Config.URLs.TaskSODatTransfer) {
             Start-Job -ScriptBlock {
                 param($url)
                 try {
