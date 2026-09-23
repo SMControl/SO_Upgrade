@@ -1,4 +1,4 @@
-# Script Version: 1.000 (Terminal Desktop Launcher)
+# Script Version: 1.002 (Terminal Desktop Launcher)
 
 # PART 1: RUNTIME SETUP & PREREQUISITES
 # PartVersion: 1.001
@@ -28,9 +28,9 @@ if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdenti
 }
 
 # PART 2: CONFIGURATION & DIRECTORIES
-# PartVersion: 1.001
+# PartVersion: 1.002
 $Config = @{
-    ScriptVersion = "1.001-T"
+    ScriptVersion = "1.002-T"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Paths         = @{
         StationMaster = "C:\Program Files (x86)\StationMaster"
@@ -168,19 +168,31 @@ function Start-ProcessInActiveSession {
         if (-not $resolvedUser) { $resolvedUser = $env:USERNAME }
 
         Write-SilentLog "Creating interactive scheduled task under user: $resolvedUser for runner: $runnerScript"
-        & schtasks.exe /Create /TN $taskName /TR "`"$runnerScript`"" /SC ONCE /ST "00:00" /IT /RU "$resolvedUser" /F 2>&1 | Out-Null
+        $stTime = (Get-Date).AddMinutes(5).ToString("HH:mm")
+        
+        # Try /RL HIGHEST first to launch with elevated admin token
+        $createCmdHighest = "schtasks.exe /Create /TN `"$taskName`" /TR `"$runnerScript`" /SC ONCE /ST $stTime /IT /RU `"$resolvedUser`" /RL HIGHEST /F >nul 2>nul"
+        & cmd.exe /c $createCmdHighest
+        
+        if ($LASTEXITCODE -ne 0) {
+            # Fallback to standard interactive task creation if /RL HIGHEST is not permitted for this account
+            Write-SilentLog "Task creation with /RL HIGHEST returned $LASTEXITCODE; retrying standard interactive runlevel..."
+            $createCmd = "schtasks.exe /Create /TN `"$taskName`" /TR `"$runnerScript`" /SC ONCE /ST $stTime /IT /RU `"$resolvedUser`" /F >nul 2>nul"
+            & cmd.exe /c $createCmd
+        }
         
         if ($LASTEXITCODE -ne 0) {
             Write-SilentLog "Interactive task creation failed with code $LASTEXITCODE; falling back to direct launch..." -IsError
             return (Start-Process -FilePath $FilePath -PassThru -ErrorAction Stop)
         }
 
-        # Run immediately
-        & schtasks.exe /Run /TN $taskName 2>&1 | Out-Null
+        # Run immediately on desktop
+        Write-SilentLog "Executing interactive task $taskName on desktop..."
+        & cmd.exe /c "schtasks.exe /Run /TN `"$taskName`" >nul 2>nul"
         Start-Sleep -Seconds 2
 
         # Cleanup scheduled task definition
-        & schtasks.exe /Delete /TN $taskName /F 2>&1 | Out-Null
+        & cmd.exe /c "schtasks.exe /Delete /TN `"$taskName`" /F >nul 2>nul"
         try { Remove-Item -Path $runnerScript -Force -ErrorAction SilentlyContinue } catch { }
 
         # Locate the launched process on the system
