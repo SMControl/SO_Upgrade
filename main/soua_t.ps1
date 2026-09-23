@@ -1,19 +1,36 @@
 # Script Version: 1.000 (Terminal Desktop Launcher)
 
 # PART 1: RUNTIME SETUP & PREREQUISITES
-# PartVersion: 1.000
+# PartVersion: 1.001
 $ErrorActionPreference = "Stop"
+$ProgressPreference = "SilentlyContinue"
 $InstallStopwatch = [System.Diagnostics.Stopwatch]::StartNew()
 
+function Safe-WriteHost {
+    param(
+        [string]$Message = "",
+        [ConsoleColor]$ForegroundColor
+    )
+    try {
+        if ($PSBoundParameters.ContainsKey('ForegroundColor')) {
+            Microsoft.PowerShell.Utility\Write-Host $Message -ForegroundColor $ForegroundColor -ErrorAction Stop
+        } else {
+            Microsoft.PowerShell.Utility\Write-Host $Message -ErrorAction Stop
+        }
+    } catch {
+        try { [Console]::WriteLine($Message) } catch { Write-Output $Message }
+    }
+}
+
 if (-not ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-    Write-Host "[ERROR] This script must be run as Administrator." -ForegroundColor Red
+    Safe-WriteHost "[ERROR] This script must be run as Administrator." -ForegroundColor Red
     exit 1
 }
 
 # PART 2: CONFIGURATION & DIRECTORIES
-# PartVersion: 1.000
+# PartVersion: 1.001
 $Config = @{
-    ScriptVersion = "1.000-T"
+    ScriptVersion = "1.001-T"
     LogDir        = "C:\winsm\SmartOffice_Installer\soua_logs"
     Paths         = @{
         StationMaster = "C:\Program Files (x86)\StationMaster"
@@ -58,11 +75,11 @@ function Write-SilentLog {
     }
     catch { }
     if ($IsError) {
-        Write-Host "  [-] $Message" -ForegroundColor Red
+        Safe-WriteHost "  [-] $Message" -ForegroundColor Red
     }
     else {
         if ($Message -notmatch '^\[\d/\d\]') {
-            Write-Host "  [>] $Message" -ForegroundColor DarkGray
+            Safe-WriteHost "  [>] $Message" -ForegroundColor DarkGray
         }
     }
 }
@@ -262,7 +279,7 @@ function Cleanup-Environment {
 
 # PART 3: PRE-FLIGHT CHECKS & BACKGROUND SERVICES
 # PartVersion: 1.001
-Write-Host "[1/7] Running pre-flight checks..." -ForegroundColor Cyan
+Safe-WriteHost "[1/7] Running pre-flight checks..." -ForegroundColor Cyan
 Write-SilentLog "[1/7] Running pre-flight checks..."
 try {
     $smOfficeVal = (Get-ItemProperty -Path "HKLM:\SOFTWARE\WOW6432Node\StationMaster\SM32" -Name "SMOffice" -ErrorAction SilentlyContinue).SMOffice
@@ -304,7 +321,7 @@ if ($fbTargetPaths.Count -gt 0) {
     } -ArgumentList (, $fbTargetPaths)
 }
 
-Write-Host "[2/7] Pausing sync services and background processes..." -ForegroundColor Cyan
+Safe-WriteHost "[2/7] Pausing sync services and background processes..." -ForegroundColor Cyan
 Write-SilentLog "[2/7] Pausing sync services and background processes..."
 
 # 1. Stop local apps and tray utilities
@@ -365,12 +382,13 @@ foreach ($procName in @($Config.Processes.PDTWiFi, $Config.Processes.PDTWiFi64))
 
 # PART 4: DOWNLOADS & VERSION SELECTION
 # PartVersion: 1.000
-Write-Host "[3/7] Checking for setup packages..." -ForegroundColor Cyan
+Safe-WriteHost "[3/7] Checking for setup packages..." -ForegroundColor Cyan
 Write-SilentLog "[3/7] Checking for setup packages via module_soget..."
 try {
     $sogetCode = Invoke-RestMethod -Uri $Config.URLs.ModuleSOGets -TimeoutSec 15 -ErrorAction Stop
     if ($sogetCode) {
         Write-SilentLog "Executing module_soget code..."
+        $sogetCode = "`$ProgressPreference = 'SilentlyContinue'`r`n" + $sogetCode
         Invoke-Expression $sogetCode
         Write-SilentLog "module_soget execution finished."
     }
@@ -423,14 +441,14 @@ $selectedExe = $null
 if ($validCandidates.Count -eq 1) {
     $selectedExe = $validCandidates[0]
     $vNum = [regex]::Match($selectedExe.Name, "\d+").Value
-    Write-Host "Auto-selected version $vNum ($($selectedExe.Name)) based on current installation ($currentInstVerInt)." -ForegroundColor Green
+    Safe-WriteHost "Auto-selected version $vNum ($($selectedExe.Name)) based on current installation ($currentInstVerInt)." -ForegroundColor Green
 } else {
-    Write-Host ""
-    Write-Host "Select Smart Office version to install:" -ForegroundColor Cyan
+    Safe-WriteHost ""
+    Safe-WriteHost "Select Smart Office version to install:" -ForegroundColor Cyan
     for ($i = 0; $i -lt $validCandidates.Count; $i++) {
         $vMatch = [regex]::Match($validCandidates[$i].Name, "\d+")
         $vDisplay = if ($vMatch.Success) { $vMatch.Value } else { $validCandidates[$i].Name }
-        Write-Host "  [$($i + 1)] $vDisplay ($($validCandidates[$i].Name))"
+        Safe-WriteHost "  [$($i + 1)] $vDisplay ($($validCandidates[$i].Name))"
     }
 
     while ($null -eq $selectedExe) {
@@ -439,7 +457,7 @@ if ($validCandidates.Count -eq 1) {
         if ($idx -ge 1 -and $idx -le $validCandidates.Count) {
             $selectedExe = $validCandidates[$idx - 1]
         } else {
-            Write-Host "Invalid choice. Please enter a number between 1 and $($validCandidates.Count)." -ForegroundColor Yellow
+            Safe-WriteHost "Invalid choice. Please enter a number between 1 and $($validCandidates.Count)." -ForegroundColor Yellow
         }
     }
 }
@@ -448,7 +466,7 @@ Write-SilentLog "User selected setup: $($selectedExe.Name)"
 
 # PART 5: PROCESS TERMINATION & FILE LOCK AUDIT
 # PartVersion: 1.003
-Write-Host "[4/7] Checking process state and directory locks..." -ForegroundColor Cyan
+Safe-WriteHost "[4/7] Checking process state and directory locks..." -ForegroundColor Cyan
 Write-SilentLog "[4/7] Checking process state and directory locks..."
 $soTimeoutSec = 3600 # 1 hour safe buffer for slow hardware / remote users
 $soStartWait = Get-Date
@@ -464,7 +482,7 @@ while ($true) {
     }
     if (-not $soRunning) { break }
     if (-not $soOpenAnnounced) {
-        Write-Host "[WAITING] Smart Office is currently open. Please close Smart Office to proceed..." -ForegroundColor Yellow
+        Safe-WriteHost "[WAITING] Smart Office is currently open. Please close Smart Office to proceed..." -ForegroundColor Yellow
         $soOpenAnnounced = $true
     }
     if (((Get-Date) - $soStartWait).TotalSeconds -gt $soTimeoutSec) {
@@ -540,8 +558,8 @@ if ($lockedFiles.Count -gt 0) {
 function Execute-SafeSetup {
     param($SetupExe)
     
-    Write-Host "[WAITING] Launching legacy setup wizard ($($SetupExe.Name)) on active desktop..." -ForegroundColor Yellow
-    Write-Host "[INFO] Please complete installation wizard on the desktop screen..." -ForegroundColor Cyan
+    Safe-WriteHost "[WAITING] Launching legacy setup wizard ($($SetupExe.Name)) on active desktop..." -ForegroundColor Yellow
+    Safe-WriteHost "[INFO] Please complete installation wizard on the desktop screen..." -ForegroundColor Cyan
     Write-SilentLog "Launching legacy setup executable ($($SetupExe.FullName)) into active desktop session..."
     
     $setupSw = [System.Diagnostics.Stopwatch]::StartNew()
@@ -563,7 +581,7 @@ function Execute-SafeSetup {
         $setupSw.Stop()
         $durationMs = [long]$setupSw.ElapsedMilliseconds
         Write-SilentLog "Setup executable closed (Duration: $durationMs ms)"
-        Write-Host "Setup wizard completed on desktop." -ForegroundColor Green
+        Safe-WriteHost "Setup wizard completed on desktop." -ForegroundColor Green
         return @{ Success = $true; DurationMs = $durationMs }
     }
     catch {
@@ -573,7 +591,7 @@ function Execute-SafeSetup {
     }
 }
 
-Write-Host "[5/7] Opening Smart Office setup package on active desktop..." -ForegroundColor Cyan
+Safe-WriteHost "[5/7] Opening Smart Office setup package on active desktop..." -ForegroundColor Cyan
 $setupResult = Execute-SafeSetup -SetupExe $selectedExe
 if (-not $setupResult.Success) {
     Cleanup-Environment
@@ -605,8 +623,8 @@ if (Test-Path $smExe) {
     Write-SilentLog "Sm32.exe not found at $smExe!" -IsError
 }
 
-Write-Host "[6/7] Launching Smart Office on desktop for first-run schema migrations..." -ForegroundColor Cyan
-Write-Host "[WAITING] Log in on desktop, allow migrations to complete, then close Smart Office..." -ForegroundColor Yellow
+Safe-WriteHost "[6/7] Launching Smart Office on desktop for first-run schema migrations..." -ForegroundColor Cyan
+Safe-WriteHost "[WAITING] Log in on desktop, allow migrations to complete, then close Smart Office..." -ForegroundColor Yellow
 Write-SilentLog "[6/7] Awaiting user first-run Smart Office close on desktop..."
 
 $smartOfficeHasRun = $false
@@ -640,7 +658,7 @@ $soStopwatch.Stop()
 $soDurationMs = [long]$soStopwatch.ElapsedMilliseconds
 Write-SilentLog "First-run Smart Office duration: $soDurationMs ms"
 
-Write-Host "[7/7] Applying folder permissions and restoring services..." -ForegroundColor Cyan
+Safe-WriteHost "[7/7] Applying folder permissions and restoring services..." -ForegroundColor Cyan
 Write-SilentLog "[7/7] Applying folder permissions and restoring services..."
 try {
     Write-SilentLog "Applying full permissions (*S-1-1-0:(OI)(CI)F) to $($Config.Paths.StationMaster)..."
@@ -676,37 +694,38 @@ $fmtInstaller = "${installerSec}s"
 $fmtSO = "${soSec}s"
 $fmtAutomated = "${automatedSec}s"
 
-Write-Host ""
-Write-Host "Upgrade completed successfully." -ForegroundColor Green
-Write-Host "Timing Breakdown:" -ForegroundColor Cyan
-Write-Host "  Total Duration:         $fmtTotal"
-Write-Host "  User in Setup Wizard:   $fmtInstaller"
-Write-Host "  User in SmartOffice:    $fmtSO"
-Write-Host "  Automated Work Time:    $fmtAutomated"
-Write-Host ""
-Write-Host "[$fmtTotal] | [$fmtInstaller in Setup] | [$fmtSO in SO] | [$fmtAutomated automated]" -ForegroundColor Green
+Safe-WriteHost ""
+Safe-WriteHost "Upgrade completed successfully." -ForegroundColor Green
+Safe-WriteHost "Timing Breakdown:" -ForegroundColor Cyan
+Safe-WriteHost "  Total Duration:         $fmtTotal"
+Safe-WriteHost "  User in Setup Wizard:   $fmtInstaller"
+Safe-WriteHost "  User in SmartOffice:    $fmtSO"
+Safe-WriteHost "  Automated Work Time:    $fmtAutomated"
+Safe-WriteHost ""
+Safe-WriteHost "[$fmtTotal] | [$fmtInstaller in Setup] | [$fmtSO in SO] | [$fmtAutomated automated]" -ForegroundColor Green
 
 Write-SilentLog "Timing Breakdown -> Total: $fmtTotal ($totalMs ms) | Setup Wizard: $fmtInstaller ($installerMs ms) | SmartOffice Wait: $fmtSO ($soDurationMs ms) | Automated Work Time: $fmtAutomated ($automatedMs ms)"
 
 # In soua_t, prompt the technician directly inside their private terminal (leaves customer desktop clean)
 if ($RebootRequired) {
-    Write-Host ""
-    Write-Host "==========================================================================" -ForegroundColor Red
-    Write-Host " WARNING: Critical files were locked during installation ($($lockedFiles -join ', '))." -ForegroundColor Red
-    Write-Host " Installation is NOT complete until a system reboot is performed!" -ForegroundColor Yellow
-    Write-Host "==========================================================================" -ForegroundColor Red
-    Write-Host ""
+    Safe-WriteHost ""
+    Safe-WriteHost "==========================================================================" -ForegroundColor Red
+    Safe-WriteHost " WARNING: Critical files were locked during installation ($($lockedFiles -join ', '))." -ForegroundColor Red
+    Safe-WriteHost " Installation is NOT complete until a system reboot is performed!" -ForegroundColor Yellow
+    Safe-WriteHost "==========================================================================" -ForegroundColor Red
+    Safe-WriteHost ""
     
     $rebootChoice = Read-Host "Would you like to reboot the target PC now? [Y/N] (Default: Y)"
     if ([string]::IsNullOrWhiteSpace($rebootChoice) -or $rebootChoice -match '^(y|yes)$') {
-        Write-Host "Technician confirmed reboot. Restarting target PC now..." -ForegroundColor Cyan
+        Safe-WriteHost "Technician confirmed reboot. Restarting target PC now..." -ForegroundColor Cyan
         Write-SilentLog "Technician selected YES to reboot in terminal. Restarting computer..."
         Restart-Computer -Force
     } else {
-        Write-Host "Reboot deferred by technician (selected 'Reboot Later')." -ForegroundColor Yellow
-        Write-Host "Please ensure target PC is rebooted before store opens." -ForegroundColor Yellow
+        Safe-WriteHost "Reboot deferred by technician (selected 'Reboot Later')." -ForegroundColor Yellow
+        Safe-WriteHost "Please ensure target PC is rebooted before store opens." -ForegroundColor Yellow
         Write-SilentLog "Technician selected NO to reboot in terminal. Reboot deferred."
     }
 }
 
 exit 0
+
